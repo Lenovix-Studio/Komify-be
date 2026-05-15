@@ -1,0 +1,21 @@
+name: Dev Backend Auto Deploy
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy Backend
+        run: |
+          cd /srv/dev/backend
+          git pull origin dev
+
+      - name: Restart Backend
+        run: |
+          cd /srv/dev/compose
+          docker compose restart backend
