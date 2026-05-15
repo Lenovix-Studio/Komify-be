@@ -1,4 +1,4 @@
-name: Dev Backend Auto Deploy
+name: Backend Dev Auto Deploy
 
 on:
   push:
@@ -7,15 +7,29 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
-      - name: Deploy Backend
+      - name: Backend Deploy
         run: |
-          cd /srv/dev/backend
-          git pull origin dev
+          set -e
 
-      - name: Restart Backend
-        run: |
+          echo "=== BACKEND AUTO DEPLOY ==="
+
+          cd /srv/dev/backend
+
+          echo "=== CURRENT BRANCH ==="
+          git branch
+
+          echo "=== FETCH LATEST ==="
+          git fetch origin
+
+          echo "=== RESET TO ORIGIN/DEV ==="
+          git reset --hard origin/dev
+
+          echo "=== BUILD & RESTART BACKEND ==="
           cd /srv/dev/compose
-          docker compose restart backend
+
+          docker compose up -d --build backend
+
+          echo "=== BACKEND DEPLOY SUCCESS ==="
