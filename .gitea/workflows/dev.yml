@@ -7,29 +7,28 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Backend Deploy
+      - name: Check Environment
+        run: |
+          echo "=== RUNNER ACTIVE ==="
+          pwd
+          ls -la /srv/dev
+
+      - name: Deploy Backend
         run: |
           set -e
 
-          echo "=== BACKEND AUTO DEPLOY ==="
+          echo "=== BACKEND DEPLOY START ==="
 
           cd /srv/dev/backend
 
-          echo "=== CURRENT BRANCH ==="
-          git branch
-
-          echo "=== FETCH LATEST ==="
           git fetch origin
-
-          echo "=== RESET TO ORIGIN/DEV ==="
           git reset --hard origin/dev
 
-          echo "=== BUILD & RESTART BACKEND ==="
           cd /srv/dev/compose
 
           docker compose up -d --build backend
 
-          echo "=== BACKEND DEPLOY SUCCESS ==="
+          echo "=== BACKEND DEPLOY DONE ==="
