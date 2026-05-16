@@ -12,25 +12,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check Environment
-        run: |
-          echo "=== RUNNER ACTIVE ==="
-          pwd
-          ls -la /srv/dev
-
-      - name: Deploy Backend
+      - name: Deploy Backend via Native SSH
         run: |
           set -e
+          
+          # 1. Siapkan folder .ssh di dalam runner
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          
+          # 2. Tulis Private Key dari Secrets ke dalam file rahasia
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          
+          # 3. Matikan pengecekan host key agar tidak meminta konfirmasi yes/no secara interaktif
+          echo -e "Host *\n\tStrictHostKeyChecking no\n" > ~/.ssh/config
+          
+          # 4. Jalankan pengecekan lingkungan dan proses deploy langsung di server target via SSH
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} << 'EOF'
+            set -e
+            
+            echo "=== RUNNER ACTIVE ==="
+            pwd
+            ls -la /srv/dev
 
-          echo "=== BACKEND DEPLOY START ==="
-
-          cd /srv/dev/backend
-
-          git fetch origin
-          git reset --hard origin/dev
-
-          cd /srv/dev/compose
-
-          docker compose up -d --build backend
-
-          echo "=== BACKEND DEPLOY DONE ==="
+            echo "=== BACKEND DEPLOY START ==="
+            
+            cd /srv/dev/backend
+            git fetch origin
+            git reset --hard origin/dev
+            
+            cd /srv/dev/compose
+            docker compose up -d --build backend
+            
+            echo "=== BACKEND DEPLOY DONE ==="
+          EOF
