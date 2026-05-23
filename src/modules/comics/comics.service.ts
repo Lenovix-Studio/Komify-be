@@ -5,6 +5,36 @@ import { PrismaService } from '@/prisma/prisma.service';
 export class ComicsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // API to get chapter details by comic ID and chapter ID
+  async getChapterDetail(comicId: string, chapterId: string) {
+    const result = await this.prisma.$queryRawUnsafe(
+      `
+      SELECT fn_get_chapter_detail(
+        $1::uuid,
+        $2::uuid
+      ) AS data
+      `,
+      comicId,
+      chapterId,
+    );
+
+    return result?.[0]?.data ?? null;
+  }
+
+  // API to get chapters by comic ID
+  async getChaptersByComic(comicId: string) {
+    const result = await this.prisma.$queryRawUnsafe(
+      `
+      SELECT fn_get_chapters_by_comic(
+        $1::uuid
+      ) AS data
+      `,
+      comicId,
+    );
+
+    return result?.[0]?.data ?? null;
+  }
+
   // API to get homepage comics with pagination
   async getHomepageComics(page = 1, limit = 10) {
     const result = await this.prisma.$queryRawUnsafe(

@@ -12,6 +12,20 @@ import { ComicsService } from './comics.service';
 export class ComicsController {
   constructor(private readonly comicsService: ComicsService) {}
 
+  @Get(':comicId/chapters/:chapterId')
+  async getChapterDetail(
+    @Param('comicId') comicId: string,
+    @Param('chapterId') chapterId: string,
+  ) {
+    return this.comicsService.getChapterDetail(comicId, chapterId);
+  }
+
+  // API to get chapter details by comic ID
+  @Get(':comicId/chapters')
+  async getChaptersByComic(@Param('comicId') comicId: string) {
+    return this.comicsService.getChaptersByComic(comicId);
+  }
+
   // API to get homepage comics with pagination
   @Get('homepage')
   async getHomepageComics(
