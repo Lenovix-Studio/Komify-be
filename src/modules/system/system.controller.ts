@@ -5,18 +5,34 @@ import {
   Body,
   UploadedFile,
   UseInterceptors,
+  Get,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-
 import { diskStorage } from 'multer';
-
 import * as path from 'path';
-
 import { SystemService } from './system.service';
 
 @Controller('system')
 export class SystemController {
   constructor(private readonly systemService: SystemService) {}
+
+  // API to get statuses
+  @Get('statuses')
+  async getStatuses() {
+    return this.systemService.getStatuses();
+  }
+
+  // API to get censorships
+  @Get('censorships')
+  async getCensorships() {
+    return this.systemService.getCensorships();
+  }
+
+  // API to get languages
+  @Get('languages')
+  async getLanguages() {
+    return this.systemService.getLanguages();
+  }
 
   // Endpoint to import comics from a JSON file
   @Post('import-comics-file')

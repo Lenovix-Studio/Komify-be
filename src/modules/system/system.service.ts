@@ -1,12 +1,49 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-
 import { PrismaService } from '../../prisma/prisma.service';
-
 import * as fs from 'fs/promises';
 
 @Injectable()
 export class SystemService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // Gets statuses from the database
+  async getStatuses() {
+    const result = await this.prisma.$queryRawUnsafe<
+      Array<{
+        fn_get_statuses: any;
+      }>
+    >(`
+      SELECT public.fn_get_statuses()
+    `);
+
+    return result?.[0]?.fn_get_statuses ?? [];
+  }
+
+  // Gets censorships from the database
+  async getCensorships() {
+    const result = await this.prisma.$queryRawUnsafe<
+      Array<{
+        fn_get_censorships: any;
+      }>
+    >(`
+      SELECT public.fn_get_censorships()
+    `);
+
+    return result?.[0]?.fn_get_censorships ?? [];
+  }
+
+  // Gets languages from the database
+  async getLanguages() {
+    const result = await this.prisma.$queryRawUnsafe<
+      Array<{
+        fn_get_languages: any;
+      }>
+    >(`
+      SELECT public.fn_get_languages()
+    `);
+
+    return result?.[0]?.fn_get_languages ?? [];
+  }
 
   // Imports comics from a JSON file
   async importComicsFile(filePath: string) {

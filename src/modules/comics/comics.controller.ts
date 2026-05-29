@@ -4,14 +4,29 @@ import {
   NotFoundException,
   Param,
   Query,
+  Post,
+  UploadedFiles,
+  UseInterceptors,
+  Body,
 } from '@nestjs/common';
-
+import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import { ComicsService } from './comics.service';
 
 @Controller('comics')
 export class ComicsController {
   constructor(private readonly comicsService: ComicsService) {}
 
+  // API to publish a comic with multipart/form-data
+  @Post('publish')
+  @UseInterceptors(AnyFilesInterceptor())
+  async publishComic(
+    @UploadedFiles() files: Array<Express.Multer.File>,
+    @Body() body: any,
+  ) {
+    return this.comicsService.publishComic(files, body);
+  }
+
+  // API to get chapter details by comic ID and chapter ID
   @Get(':comicId/chapters/:chapterId')
   async getChapterDetail(
     @Param('comicId') comicId: string,
