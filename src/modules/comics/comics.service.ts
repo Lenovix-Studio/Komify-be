@@ -61,6 +61,262 @@ export class ComicsService {
     return Number(lastComic?.legacy_id || 0) + 1;
   }
 
+  // API to edit an existing comic
+  async editComic(
+    comicId: string,
+    files: Array<Express.Multer.File>,
+    body: any,
+  ) {
+    // =========================
+    // ENV
+    // =========================
+    const STATIC_DIR = this.configService.get<string>('STATIC_DIR');
+    const STATIC_PREFIX = this.configService.get<string>('STATIC_PREFIX');
+
+    if (!STATIC_DIR || !STATIC_PREFIX) {
+      throw new BadRequestException('STATIC_DIR or STATIC_PREFIX missing');
+    }
+
+    // =========================
+    // PARSE DOCUMENT
+    // =========================
+    if (!body.document) {
+      throw new BadRequestException('document is required');
+    }
+
+    let document: any;
+    try {
+      document = JSON.parse(body.document);
+    } catch {
+      throw new BadRequestException('invalid document json');
+    }
+
+    // =========================
+    // FIND COMIC
+    // =========================
+    const existingComic = await this.prisma.comics.findFirst({
+      where: {
+        id: comicId,
+      },
+    });
+
+    if (!existingComic) {
+      throw new BadRequestException('comic not found');
+    }
+
+    // =========================
+    // VALIDATE STATUS
+    // =========================
+    const status = await this.prisma.statuses.findFirst({
+      where: {
+        id: document.status_id,
+      },
+    });
+
+    if (!status) {
+      throw new BadRequestException('invalid status');
+    }
+
+    // =========================
+    // VALIDATE CATEGORY
+    // =========================
+    const category = await this.prisma.categories.findFirst({
+      where: {
+        slug: document.template,
+      },
+    });
+
+    if (!category) {
+      throw new BadRequestException('invalid category');
+    }
+
+    // =========================
+    // COVER
+    // =========================
+    const coverFile = files.find((f) => f.fieldname === 'cover');
+
+    // =========================
+    // DIRECTORY
+    // =========================
+    const comicDir = path.join(STATIC_DIR, String(existingComic.legacy_id));
+    fs.mkdirSync(comicDir, {
+      recursive: true,
+    });
+
+    // =========================
+    // COVER PATH
+    // =========================
+    let coverPath = existingComic.cover_path;
+
+    // =========================
+    // REPLACE COVER
+    // =========================
+    if (coverFile) {
+      const coverExt = path.extname(coverFile.originalname || '') || '.jpg';
+      const coverFilename = `cover${coverExt}`;
+      const coverSavePath = path.join(comicDir, coverFilename);
+      fs.writeFileSync(coverSavePath, coverFile.buffer);
+      coverPath = `${STATIC_PREFIX}/${existingComic.legacy_id}/${coverFilename}`;
+    }
+
+    // =========================
+    // TRANSACTION
+    // =========================
+    return await this.prisma.$transaction(async (tx) => {
+      // =========================
+      // UPDATE COMIC
+      // =========================
+      await tx.comics.update({
+        where: {
+          id: comicId,
+        },
+        data: {
+          title: document.metadata.title,
+          alternative_title: document.metadata.alternative_title || null,
+          description: document.metadata.description || null,
+          category_id: category.id,
+          status_id: document.metadata.status_id,
+          cover_path: coverPath,
+          updated_at: new Date(),
+        },
+      });
+
+      // =========================
+      // DELETE OLD RELATIONS
+      // =========================
+      await tx.comic_parodies.deleteMany({
+        where: {
+          comic_id: comicId,
+        },
+      });
+
+      await tx.comic_characters.deleteMany({
+        where: {
+          comic_id: comicId,
+        },
+      });
+
+      await tx.comic_artists.deleteMany({
+        where: {
+          comic_id: comicId,
+        },
+      });
+
+      await tx.comic_authors.deleteMany({
+        where: {
+          comic_id: comicId,
+        },
+      });
+
+      await tx.comic_groups.deleteMany({
+        where: {
+          comic_id: comicId,
+        },
+      });
+
+      await tx.comic_tags.deleteMany({
+        where: {
+          comic_id: comicId,
+        },
+      });
+
+      // =========================
+      // METADATA
+      // =========================
+      const metadata = document.metadata;
+
+      // =========================
+      // PARODIES
+      // =========================
+      for (const item of this.splitMetadata(metadata.parodies)) {
+        const parody = await this.upsertEntity(tx.tb_parodies, item);
+
+        await tx.comic_parodies.create({
+          data: {
+            comic_id: comicId,
+            parody_id: parody.id,
+          },
+        });
+      }
+
+      // =========================
+      // CHARACTERS
+      // =========================
+      for (const item of this.splitMetadata(metadata.characters)) {
+        const character = await this.upsertEntity(tx.tb_characters, item);
+
+        await tx.comic_characters.create({
+          data: {
+            comic_id: comicId,
+            character_id: character.id,
+          },
+        });
+      }
+
+      // =========================
+      // ARTISTS
+      // =========================
+      for (const item of this.splitMetadata(metadata.artists)) {
+        const artist = await this.upsertEntity(tx.tb_artists, item);
+
+        await tx.comic_artists.create({
+          data: {
+            comic_id: comicId,
+            artist_id: artist.id,
+          },
+        });
+      }
+
+      // =========================
+      // AUTHORS
+      // =========================
+      for (const item of this.splitMetadata(metadata.authors)) {
+        const author = await this.upsertEntity(tx.tb_authors, item);
+
+        await tx.comic_authors.create({
+          data: {
+            comic_id: comicId,
+            author_id: author.id,
+          },
+        });
+      }
+
+      // =========================
+      // GROUPS
+      // =========================
+      for (const item of this.splitMetadata(metadata.groups)) {
+        const group = await this.upsertEntity(tx.tb_groups, item);
+
+        await tx.comic_groups.create({
+          data: {
+            comic_id: comicId,
+            group_id: group.id,
+          },
+        });
+      }
+
+      // =========================
+      // TAGS
+      // =========================
+      for (const item of this.splitMetadata(metadata.tags)) {
+        const tag = await this.upsertEntity(tx.tb_tags, item);
+
+        await tx.comic_tags.create({
+          data: {
+            comic_id: comicId,
+            tag_id: tag.id,
+          },
+        });
+      }
+
+      return {
+        success: true,
+        comic_id: comicId,
+      };
+    });
+  }
+
+  // API to publish a new comic
   async publishComic(files: Array<Express.Multer.File>, body: any) {
     // =========================
     // ENV
@@ -167,6 +423,8 @@ export class ComicsService {
           status_id: status.id,
           cover_path: `${STATIC_PREFIX}/${legacyId}/${coverFilename}`,
           total_chapters: document.chapters.length,
+          created_at: new Date(),
+          updated_at: new Date(),
         },
       });
 

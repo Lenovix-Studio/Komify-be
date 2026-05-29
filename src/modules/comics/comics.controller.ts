@@ -8,15 +8,33 @@ import {
   UploadedFiles,
   UseInterceptors,
   Body,
+  Put,
+  UploadedFile,
 } from '@nestjs/common';
-import { AnyFilesInterceptor } from '@nestjs/platform-express';
+import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { ComicsService } from './comics.service';
-
 @Controller('comics')
 export class ComicsController {
   constructor(private readonly comicsService: ComicsService) {}
 
-  // API to publish a comic with multipart/form-data
+  // API to edit an existing comic
+  @Put(':comicId')
+  @UseInterceptors(FileInterceptor('cover'))
+  async editComic(
+    @Param('comicId') comicId: string,
+
+    @UploadedFile()
+    cover: Express.Multer.File,
+
+    @Body()
+    body: any,
+  ) {
+    const files = cover ? [cover] : [];
+
+    return this.comicsService.editComic(comicId, files, body);
+  }
+
+  // API to publish a comic
   @Post('publish')
   @UseInterceptors(AnyFilesInterceptor())
   async publishComic(
