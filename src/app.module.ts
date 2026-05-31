@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { SystemModule } from './modules/system/system.module';
 import { ComicsModule } from './modules/comics/comics.module';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { ChaptersModule } from './modules/chapters/chapters.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { AppService } from './app.service';
     PrismaModule,
     SystemModule,
     ComicsModule,
+    ChaptersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
