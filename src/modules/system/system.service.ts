@@ -47,10 +47,6 @@ export class SystemService {
 
   // Imports comics from a JSON file
   async importComicsFile(filePath: string) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new BadRequestException('Import comics is disabled in production');
-    }
-
     try {
       const fileContent = await fs.readFile(filePath, 'utf-8');
       const jsonData = JSON.parse(fileContent);
@@ -75,10 +71,6 @@ export class SystemService {
 
   // Imports comics from a JSON
   async importComics(jsonData: unknown) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new BadRequestException('Import comics is disabled in production');
-    }
-
     await this.prisma.$executeRawUnsafe(
       `
       SELECT public.fn_import_comics($1::jsonb);
