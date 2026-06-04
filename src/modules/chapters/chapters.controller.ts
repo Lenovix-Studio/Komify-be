@@ -2,7 +2,9 @@ import {
   Body,
   Controller,
   Param,
+  Post,
   Put,
+  Get,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
@@ -13,7 +15,13 @@ import { ChaptersService } from './chapters.service';
 export class ChaptersController {
   constructor(private readonly chaptersService: ChaptersService) {}
 
-  // Edit a chapter
+  // GET CHAPTER DETAILS
+  @Get(':chapterId')
+  async getChapter(@Param('chapterId') chapterId: string) {
+    return this.chaptersService.getChapter(chapterId);
+  }
+
+  // EDIT CHAPTER
   @Put(':chapterId')
   @UseInterceptors(AnyFilesInterceptor())
   async editChapter(
@@ -21,7 +29,7 @@ export class ChaptersController {
     chapterId: string,
 
     @UploadedFiles()
-    files: Array<Express.Multer.File>,
+    files: Express.Multer.File[],
 
     @Body()
     body: any,

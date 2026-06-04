@@ -15,6 +15,65 @@ export class ChaptersService {
     private readonly configService: ConfigService,
   ) {}
 
+  // Get chapter details
+  async getChapter(chapterId: string) {
+    const chapter = await this.prisma.chapters.findUnique({
+      where: {
+        id: chapterId,
+      },
+      include: {
+        pages: {
+          orderBy: {
+            page_number: 'asc',
+          },
+        },
+        comics: {
+          select: {
+            id: true,
+            title: true,
+            legacy_id: true,
+          },
+        },
+        languages: true,
+        censorships: true,
+      },
+    });
+
+    if (!chapter) {
+      throw new NotFoundException('chapter not found');
+    }
+
+    return {
+      id: chapter.id,
+      comic: {
+        id: chapter.comics.id,
+        title: chapter.comics.title,
+        legacy_id: Number(chapter.comics.legacy_id),
+      },
+      title: chapter.title,
+      chapter_number: chapter.chapter_number,
+      total_pages: chapter.total_pages,
+      published_at: chapter.published_at,
+      language: {
+        code: chapter.languages.code,
+        name: chapter.languages.name,
+      },
+      censorship: {
+        id: chapter.censorships.id,
+        name: chapter.censorships.name,
+      },
+      pages: chapter.pages.map((page) => ({
+        id: page.id,
+        filename: page.filename,
+        filepath: page.filepath,
+        page_number: page.page_number,
+        width: page.width,
+        height: page.height,
+        filesize: page.filesize ? Number(page.filesize) : null,
+      })),
+    };
+  }
+
   // Edit a chapter
   async editChapter(
     chapterId: string,

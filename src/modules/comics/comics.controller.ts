@@ -10,12 +10,37 @@ import {
   Body,
   Put,
   UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { ComicsService } from './comics.service';
+import { CreateChapterDto } from '../chapters/dto/create-chapter.dto';
+
 @Controller('comics')
 export class ComicsController {
   constructor(private readonly comicsService: ComicsService) {}
+
+  // API to create a new chapter for a comic
+  @Post(':comicId/chapters')
+  @UseInterceptors(AnyFilesInterceptor())
+  async createChapter(
+    @Param('comicId') comicId: string,
+
+    @UploadedFiles()
+    files: Express.Multer.File[],
+
+    @Body('metadata')
+    metadata: string,
+  ) {
+    let dto: CreateChapterDto;
+    try {
+      dto = JSON.parse(metadata);
+    } catch {
+      throw new BadRequestException('invalid metadata json');
+    }
+
+    return this.comicsService.createChapter(comicId, dto, files);
+  }
 
   // API to edit an existing comic
   @Put(':comicId')

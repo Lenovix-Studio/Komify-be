@@ -1,10 +1,16 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import slugify from 'slugify';
+import { CreateChapterDto } from '../chapters/dto/create-chapter.dto';
 
 @Injectable()
 export class ComicsService {
@@ -59,6 +65,167 @@ export class ComicsService {
       },
     });
     return Number(lastComic?.legacy_id || 0) + 1;
+  }
+
+  // CREATE CHAPTER
+  private async saveChapterPage(
+    legacyId: number | bigint,
+    chapterNumber: string,
+    file: Express.Multer.File,
+  ) {
+    const STATIC_DIR = this.configService.get<string>('STATIC_DIR');
+    const STATIC_PREFIX = this.configService.get<string>('STATIC_PREFIX');
+    if (!STATIC_DIR || !STATIC_PREFIX) {
+      throw new BadRequestException('STATIC_DIR or STATIC_PREFIX missing');
+    }
+
+    const baseDir = path.join(
+      STATIC_DIR,
+      String(legacyId),
+      'chapters',
+      chapterNumber,
+    );
+    await fs.promises.mkdir(baseDir, {
+      recursive: true,
+    });
+
+    const filename = file.originalname;
+    const fullPath = path.join(baseDir, filename);
+    await fs.promises.writeFile(fullPath, file.buffer);
+    return `${STATIC_PREFIX}/${legacyId}/chapters/${chapterNumber}/${filename}`;
+  }
+  async createChapter(
+    comicId: string,
+    dto: CreateChapterDto,
+    files: Express.Multer.File[],
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      // Validate
+      const comic = await tx.comics.findUnique({
+        where: {
+          id: comicId,
+        },
+      });
+      if (!comic) {
+        throw new NotFoundException('comic not found');
+      }
+
+      const language = await tx.languages.findUnique({
+        where: {
+          code: dto.language_code,
+        },
+      });
+      if (!language) {
+        throw new BadRequestException('invalid language');
+      }
+
+      const censorship = await tx.censorships.findUnique({
+        where: {
+          id: dto.censorship_id,
+        },
+      });
+      if (!censorship) {
+        throw new BadRequestException('invalid censorship');
+      }
+
+      const existing = await tx.chapters.findFirst({
+        where: {
+          comic_id: comicId,
+          chapter_number: dto.chapter_number,
+          language_code: dto.language_code,
+        },
+      });
+      if (existing) {
+        throw new ConflictException('chapter already exists');
+      }
+
+      if (dto.pages?.length === 0) {
+        throw new BadRequestException('chapter must contain at least 1 page');
+      }
+
+      if (files.length !== dto.pages?.length) {
+        throw new BadRequestException(
+          `pages count (${dto.pages?.length}) does not match uploaded files (${files.length})`,
+        );
+      }
+
+      const tempIds = dto.pages.map((x) => x.temp_id);
+      const duplicateTempIds = tempIds.filter(
+        (item, index) => tempIds.indexOf(item) !== index,
+      );
+      if (duplicateTempIds.length > 0) {
+        throw new BadRequestException(
+          `duplicate temp_id detected: ${duplicateTempIds.join(', ')}`,
+        );
+      }
+
+      const pageNumbers = dto.pages.map((x) => x.page_number);
+      const duplicatePageNumbers = pageNumbers.filter(
+        (item, index) => pageNumbers.indexOf(item) !== index,
+      );
+      if (duplicatePageNumbers.length > 0) {
+        throw new BadRequestException(
+          `duplicate page_number detected: ${duplicatePageNumbers.join(', ')}`,
+        );
+      }
+
+      // Create chapter
+      const chapter = await tx.chapters.create({
+        data: {
+          comic_id: comicId,
+          title: dto.title,
+          chapter_number: dto.chapter_number,
+          language_code: dto.language_code,
+          censorship_id: dto.censorship_id,
+          total_pages: dto.pages.length,
+        },
+      });
+
+      // Save pages
+      for (const page of dto.pages) {
+        const uploadedFile = files.find((f) => f.fieldname === page.temp_id);
+        if (!uploadedFile) {
+          throw new BadRequestException(
+            `missing file for temp_id ${page.temp_id}`,
+          );
+        }
+
+        const filepath = await this.saveChapterPage(
+          comic.legacy_id,
+          dto.chapter_number,
+          uploadedFile,
+        );
+        await tx.pages.create({
+          data: {
+            chapter_id: chapter.id,
+            page_number: page.page_number,
+            filename: uploadedFile.originalname,
+            filepath,
+            filesize: BigInt(uploadedFile.size),
+          },
+        });
+      }
+
+      // Update total chapters in comic
+      const totalChapters = await tx.chapters.count({
+        where: {
+          comic_id: comicId,
+          deleted_at: null,
+        },
+      });
+      await tx.comics.update({
+        where: {
+          id: comicId,
+        },
+        data: {
+          total_chapters: totalChapters,
+        },
+      });
+      return {
+        success: true,
+        chapter_id: chapter.id,
+      };
+    });
   }
 
   // API to edit an existing comic
