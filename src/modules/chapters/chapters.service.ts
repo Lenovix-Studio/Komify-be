@@ -5,8 +5,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import * as fs from 'fs';
 import * as path from 'path';
+import * as fs from 'fs/promises';
 
 @Injectable()
 export class ChaptersService {
@@ -14,6 +14,85 @@ export class ChaptersService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
   ) {}
+
+  // Delete a chapter and its pages, also delete chapter folder and files
+  async deleteChapter(chapterId: string) {
+    const chapter = await this.prisma.chapters.findUnique({
+      where: {
+        id: chapterId,
+      },
+      include: {
+        comics: {
+          select: {
+            id: true,
+            title: true,
+            legacy_id: true,
+          },
+        },
+        pages: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
+    if (!chapter) {
+      throw new NotFoundException('chapter not found');
+    }
+
+    const staticDir =
+      this.configService.get<string>('STATIC_DIR') || process.env.STATIC_DIR;
+    const chapterFolder = path.join(
+      staticDir ?? 'unknown',
+      String(chapter.comics.legacy_id),
+      'chapters',
+      chapter.chapter_number,
+    );
+    const totalPages = chapter.pages.length;
+
+    try {
+      await fs.rm(chapterFolder, {
+        recursive: true,
+        force: true,
+      });
+    } catch (error) {
+      console.error('failed delete chapter folder', error);
+    }
+
+    await this.prisma.chapters.delete({
+      where: {
+        id: chapterId,
+      },
+    });
+
+    const totalChapters = await this.prisma.chapters.count({
+      where: {
+        comic_id: chapter.comic_id,
+        deleted_at: null,
+      },
+    });
+
+    await this.prisma.comics.update({
+      where: {
+        id: chapter.comic_id,
+      },
+      data: {
+        total_chapters: totalChapters,
+      },
+    });
+
+    return {
+      success: true,
+      deleted_chapter_id: chapterId,
+      comic: {
+        id: chapter.comics.id,
+        title: chapter.comics.title,
+        legacy_id: Number(chapter.comics.legacy_id),
+      },
+      deleted_pages: totalPages,
+      deleted_folder: chapterFolder,
+    };
+  }
 
   // Get chapter details
   async getChapter(chapterId: string) {
@@ -129,7 +208,7 @@ export class ChaptersService {
       'chapters',
       chapter.chapter_number,
     );
-    fs.mkdirSync(chapterDir, {
+    await fs.mkdir(chapterDir, {
       recursive: true,
     });
 
@@ -202,12 +281,9 @@ export class ChaptersService {
         for (const page of pagesToDelete) {
           try {
             const relativePath = page.filepath.replace(STATIC_PREFIX, '');
-
             const fullPath = path.join(STATIC_DIR, relativePath);
-
-            if (fs.existsSync(fullPath)) {
-              fs.unlinkSync(fullPath);
-            }
+            await fs.access(fullPath);
+            await fs.unlink(fullPath);
           } catch (error) {
             console.error(error);
           }
@@ -283,9 +359,8 @@ export class ChaptersService {
         try {
           const relativePath = existingPage.filepath.replace(STATIC_PREFIX, '');
           const fullPath = path.join(STATIC_DIR, relativePath);
-          if (fs.existsSync(fullPath)) {
-            fs.unlinkSync(fullPath);
-          }
+          await fs.access(fullPath);
+          await fs.unlink(fullPath);
         } catch (error) {
           console.error(error);
         }
@@ -293,7 +368,7 @@ export class ChaptersService {
         const ext = path.extname(uploadedFile.originalname) || '.jpg';
         const filename = `page${page.page_number}${ext}`;
         const savePath = path.join(chapterDir, filename);
-        fs.writeFileSync(savePath, uploadedFile.buffer);
+        await fs.writeFile(savePath, uploadedFile.buffer);
         await tx.pages.update({
           where: {
             id: page.id,
@@ -327,7 +402,7 @@ export class ChaptersService {
         const ext = path.extname(uploadedFile.originalname) || '.jpg';
         const filename = `page${page.page_number}${ext}`;
         const savePath = path.join(chapterDir, filename);
-        fs.writeFileSync(savePath, uploadedFile.buffer);
+        await fs.writeFile(savePath, uploadedFile.buffer);
         await tx.pages.create({
           data: {
             chapter_id: chapterId,
