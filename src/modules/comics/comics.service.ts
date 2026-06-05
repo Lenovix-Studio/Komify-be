@@ -5,7 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
@@ -67,6 +67,57 @@ export class ComicsService {
     return Number(lastComic?.legacy_id || 0) + 1;
   }
 
+  // API to delete a comic by ID
+  async deleteComic(comicId: string) {
+    const comic = await this.prisma.comics.findUnique({
+      where: {
+        id: comicId,
+      },
+      include: {
+        chapters: {
+          include: {
+            pages: true,
+          },
+        },
+      },
+    });
+    if (!comic) {
+      throw new NotFoundException('comic not found');
+    }
+
+    const deletedChapters = comic.chapters.length;
+    const deletedPages = comic.chapters.reduce(
+      (total, chapter) => total + chapter.pages.length,
+      0,
+    );
+    const staticDir =
+      process.env.STATIC_DIR || 'D:\\komify-server\\public\\komify_dev';
+    const comicFolder = path.join(staticDir, String(comic.legacy_id));
+
+    try {
+      await fs.rm(comicFolder, {
+        recursive: true,
+        force: true,
+      });
+    } catch (error) {
+      console.error(`failed delete folder: ${comicFolder}`, error);
+    }
+
+    await this.prisma.comics.delete({
+      where: {
+        id: comicId,
+      },
+    });
+
+    return {
+      success: true,
+      comic_id: comicId,
+      deleted_chapters: deletedChapters,
+      deleted_pages: deletedPages,
+      deleted_folder: comicFolder,
+    };
+  }
+
   // CREATE CHAPTER
   private async saveChapterPage(
     legacyId: number | bigint,
@@ -85,13 +136,13 @@ export class ComicsService {
       'chapters',
       chapterNumber,
     );
-    await fs.promises.mkdir(baseDir, {
+    await fs.mkdir(baseDir, {
       recursive: true,
     });
 
     const filename = file.originalname;
     const fullPath = path.join(baseDir, filename);
-    await fs.promises.writeFile(fullPath, file.buffer);
+    await fs.writeFile(fullPath, file.buffer);
     return `${STATIC_PREFIX}/${legacyId}/chapters/${chapterNumber}/${filename}`;
   }
   async createChapter(
@@ -306,7 +357,7 @@ export class ComicsService {
     // DIRECTORY
     // =========================
     const comicDir = path.join(STATIC_DIR, String(existingComic.legacy_id));
-    fs.mkdirSync(comicDir, {
+    await fs.mkdir(comicDir, {
       recursive: true,
     });
 
@@ -322,7 +373,7 @@ export class ComicsService {
       const coverExt = path.extname(coverFile.originalname || '') || '.jpg';
       const coverFilename = `cover${coverExt}`;
       const coverSavePath = path.join(comicDir, coverFilename);
-      fs.writeFileSync(coverSavePath, coverFile.buffer);
+      await fs.writeFile(coverSavePath, coverFile.buffer);
       coverPath = `${STATIC_PREFIX}/${existingComic.legacy_id}/${coverFilename}`;
     }
 
@@ -564,7 +615,7 @@ export class ComicsService {
       // DIRECTORY
       // =========================
       const comicDir = path.join(STATIC_DIR, String(legacyId));
-      fs.mkdirSync(comicDir, {
+      await fs.mkdir(comicDir, {
         recursive: true,
       });
 
@@ -574,7 +625,7 @@ export class ComicsService {
       const coverExt = path.extname(coverFile.originalname || '') || '.jpg';
       const coverFilename = `cover${coverExt}`;
       const coverSavePath = path.join(comicDir, coverFilename);
-      fs.writeFileSync(coverSavePath, coverFile.buffer);
+      await fs.writeFile(coverSavePath, coverFile.buffer);
 
       // =========================
       // CREATE COMIC
@@ -693,7 +744,7 @@ export class ComicsService {
         // CHAPTER DIR
         // =========================
         const chapterDir = path.join(comicDir, 'chapters', chapterNumber);
-        fs.mkdirSync(chapterDir, {
+        await fs.mkdir(chapterDir, {
           recursive: true,
         });
 
@@ -743,7 +794,7 @@ export class ComicsService {
           const ext = path.extname(file.originalname || '') || '.jpg';
           const filename = `page${i + 1}${ext}`;
           const savePath = path.join(chapterDir, filename);
-          fs.writeFileSync(savePath, file.buffer);
+          await fs.writeFile(savePath, file.buffer);
 
           pagesPayload.push({
             chapter_id: chapterId,

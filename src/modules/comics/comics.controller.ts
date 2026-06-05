@@ -9,6 +9,7 @@ import {
   UseInterceptors,
   Body,
   Put,
+  Delete,
   UploadedFile,
   BadRequestException,
 } from '@nestjs/common';
@@ -19,6 +20,12 @@ import { CreateChapterDto } from '../chapters/dto/create-chapter.dto';
 @Controller('comics')
 export class ComicsController {
   constructor(private readonly comicsService: ComicsService) {}
+
+  // API to delete a comic by ID
+  @Delete(':comicId')
+  async deleteComic(@Param('comicId') comicId: string) {
+    return this.comicsService.deleteComic(comicId);
+  }
 
   // API to create a new chapter for a comic
   @Post(':comicId/chapters')
