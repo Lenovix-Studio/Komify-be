@@ -36,13 +36,11 @@ export class ComicsService {
       lower: true,
       strict: true,
     });
-
     const existing = await model.findFirst({
       where: {
         slug,
       },
     });
-
     if (existing) {
       return existing;
     }
@@ -65,6 +63,192 @@ export class ComicsService {
       },
     });
     return Number(lastComic?.legacy_id || 0) + 1;
+  }
+
+  async findAll(query: {
+    page?: number;
+    limit?: number;
+    q?: string;
+    category?: string;
+    status?: string;
+    language?: string;
+    tags?: string[];
+    sort?: string;
+  }) {
+    const page = Number(query.page || 1);
+    const limit = Number(query.limit || 10);
+    const skip = (page - 1) * limit;
+    const where: any = {
+      deleted_at: null,
+    };
+
+    // =========================
+    // SEARCH
+    // =========================
+
+    if (query.q?.trim()) {
+      where.OR = [
+        {
+          title: {
+            contains: query.q,
+            mode: 'insensitive',
+          },
+        },
+        {
+          alternative_title: {
+            contains: query.q,
+            mode: 'insensitive',
+          },
+        },
+      ];
+    }
+
+    // =========================
+    // CATEGORY
+    // =========================
+
+    if (query.category) {
+      where.categories = {
+        slug: query.category,
+      };
+    }
+
+    // =========================
+    // STATUS
+    // =========================
+
+    if (query.status) {
+      where.statuses = {
+        name: {
+          equals: query.status,
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    // =========================
+    // LANGUAGE
+    // =========================
+
+    if (query.language) {
+      where.chapters = {
+        some: {
+          language_code: query.language,
+        },
+      };
+    }
+
+    // =========================
+    // TAGS
+    // =========================
+
+    if (query.tags?.length) {
+      where.comic_tags = {
+        some: {
+          tb_tags: {
+            slug: {
+              in: query.tags,
+            },
+          },
+        },
+      };
+    }
+
+    // =========================
+    // SORT
+    // =========================
+
+    let orderBy: any = {
+      updated_at: 'desc',
+    };
+
+    switch (query.sort) {
+      case 'newest':
+        orderBy = {
+          created_at: 'desc',
+        };
+        break;
+
+      case 'popular':
+        orderBy = {
+          view_count: 'desc',
+        };
+        break;
+
+      case 'title':
+        orderBy = {
+          title: 'asc',
+        };
+        break;
+
+      case 'latest':
+      default:
+        orderBy = {
+          updated_at: 'desc',
+        };
+        break;
+    }
+
+    const [comics, total] = await Promise.all([
+      this.prisma.comics.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy,
+        select: {
+          id: true,
+          legacy_id: true,
+          title: true,
+          alternative_title: true,
+          cover_path: true,
+          published_at: true,
+          total_chapters: true,
+          view_count: true,
+          statuses: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          categories: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
+        },
+      }),
+
+      this.prisma.comics.count({
+        where,
+      }),
+    ]);
+
+    const data = comics.map((comic) => ({
+      id: comic.id,
+      legacy_id: comic.legacy_id,
+      title: comic.title,
+      alternative_title: comic.alternative_title,
+      cover_path: comic.cover_path,
+      published_at: comic.published_at,
+      total_chapters: comic.total_chapters,
+      view_count: comic.view_count,
+      status: comic.statuses,
+      category: comic.categories,
+    }));
+
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        total_data: total,
+        total_pages: Math.ceil(total / limit),
+        has_prev: page > 1,
+        has_next: page * limit < total,
+      },
+    };
   }
 
   // API to delete a comic by ID

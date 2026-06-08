@@ -21,6 +21,34 @@ import { CreateChapterDto } from '../chapters/dto/create-chapter.dto';
 export class ComicsController {
   constructor(private readonly comicsService: ComicsService) {}
 
+  @Get()
+  async findAll(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('q') q?: string,
+    @Query('category') category?: string,
+    @Query('status') status?: string,
+    @Query('language') language?: string,
+    @Query('tags') tags?: string,
+    @Query('sort') sort?: string,
+  ) {
+    return this.comicsService.findAll({
+      page: Math.max(Number(page || 1), 1),
+      limit: Math.min(Math.max(Number(limit || 10), 1), 100),
+      q: q?.trim(),
+      category: category?.trim(),
+      status: status?.trim(),
+      language: language?.trim(),
+      tags: tags
+        ? tags
+            .split(',')
+            .map((tag) => tag.trim())
+            .filter(Boolean)
+        : [],
+      sort: sort?.trim()?.toLowerCase(),
+    });
+  }
+
   // API to delete a comic by ID
   @Delete(':comicId')
   async deleteComic(@Param('comicId') comicId: string) {
