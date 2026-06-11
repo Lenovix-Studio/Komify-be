@@ -8,6 +8,7 @@ import { SystemModule } from './modules/system/system.module';
 import { ComicsModule } from './modules/comics/comics.module';
 import { ChaptersModule } from './modules/chapters/chapters.module';
 import { ScraperModule } from './modules/scraper/scraper.module';
+import { BookmarksModule } from './modules/bookmarks/bookmarks.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { ScraperModule } from './modules/scraper/scraper.module';
     ComicsModule,
     ChaptersModule,
     ScraperModule,
+    BookmarksModule,
   ],
   controllers: [AppController],
   providers: [AppService],
