@@ -65,6 +65,31 @@ export class ComicsService {
     return Number(lastComic?.legacy_id || 0) + 1;
   }
 
+  // API to get a random comic
+  async getRandomComic() {
+    const count = await this.prisma.comics.count();
+    if (count === 0) {
+      throw new NotFoundException('no comic found');
+    }
+
+    const randomIndex = Math.floor(Math.random() * count);
+    const comic = await this.prisma.comics.findFirst({
+      skip: randomIndex,
+      select: {
+        id: true,
+        title: true,
+        seo_slug: true,
+        cover_path: true,
+        total_chapters: true,
+      },
+    });
+
+    if (!comic) {
+      throw new NotFoundException('no comic found');
+    }
+    return comic;
+  }
+
   // API to get all comics with pagination and filtering
   async findAll(query: {
     page?: number;
@@ -245,7 +270,7 @@ export class ComicsService {
     // =========================
 
     let orderBy: any = {
-      updated_at: 'desc',
+      legacy_id: 'desc',
     };
 
     switch (query.sort) {
@@ -270,7 +295,7 @@ export class ComicsService {
       case 'latest':
       default:
         orderBy = {
-          updated_at: 'desc',
+          legacy_id: 'desc',
         };
         break;
     }

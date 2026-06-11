@@ -21,6 +21,13 @@ import { CreateChapterDto } from '../chapters/dto/create-chapter.dto';
 export class ComicsController {
   constructor(private readonly comicsService: ComicsService) {}
 
+  // API to get a random comic
+  @Get('random')
+  async getRandomComic() {
+    return this.comicsService.getRandomComic();
+  }
+
+  // API to get a list of comics with optional filters and pagination
   @Get()
   async findAll(
     @Query('page') page?: string,
