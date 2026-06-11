@@ -30,22 +30,27 @@ export class ComicsController {
     @Query('status') status?: string,
     @Query('language') language?: string,
     @Query('tags') tags?: string,
+    @Query('parodies') parodies?: string,
+    @Query('characters') characters?: string,
+    @Query('artists') artists?: string,
+    @Query('groups') groups?: string,
+    @Query('authors') authors?: string,
     @Query('sort') sort?: string,
   ) {
     return this.comicsService.findAll({
-      page: Math.max(Number(page || 1), 1),
-      limit: Math.min(Math.max(Number(limit || 10), 1), 100),
-      q: q?.trim(),
-      category: category?.trim(),
-      status: status?.trim(),
-      language: language?.trim(),
-      tags: tags
-        ? tags
-            .split(',')
-            .map((tag) => tag.trim())
-            .filter(Boolean)
-        : [],
-      sort: sort?.trim()?.toLowerCase(),
+      page: Number(page || 1),
+      limit: Number(limit || 20),
+      q,
+      category,
+      status,
+      language,
+      tags: tags ? tags.split(',').map((x) => x.trim()) : [],
+      parodies: parodies ? parodies.split(',').map((x) => x.trim()) : [],
+      characters: characters ? characters.split(',').map((x) => x.trim()) : [],
+      artists: artists ? artists.split(',').map((x) => x.trim()) : [],
+      groups: groups ? groups.split(',').map((x) => x.trim()) : [],
+      authors: authors ? authors.split(',').map((x) => x.trim()) : [],
+      sort,
     });
   }
 

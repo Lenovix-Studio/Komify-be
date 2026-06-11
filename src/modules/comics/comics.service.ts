@@ -65,6 +65,7 @@ export class ComicsService {
     return Number(lastComic?.legacy_id || 0) + 1;
   }
 
+  // API to get all comics with pagination and filtering
   async findAll(query: {
     page?: number;
     limit?: number;
@@ -73,6 +74,11 @@ export class ComicsService {
     status?: string;
     language?: string;
     tags?: string[];
+    parodies?: string[];
+    characters?: string[];
+    artists?: string[];
+    groups?: string[];
+    authors?: string[];
     sort?: string;
   }) {
     const page = Number(query.page || 1);
@@ -148,6 +154,86 @@ export class ComicsService {
           tb_tags: {
             slug: {
               in: query.tags,
+            },
+          },
+        },
+      };
+    }
+
+    // =========================
+    // PARODIES
+    // =========================
+
+    if (query.parodies?.length) {
+      where.comic_parodies = {
+        some: {
+          tb_parodies: {
+            slug: {
+              in: query.parodies,
+            },
+          },
+        },
+      };
+    }
+
+    // =========================
+    // CHARACTERS
+    // =========================
+
+    if (query.characters?.length) {
+      where.comic_characters = {
+        some: {
+          tb_characters: {
+            slug: {
+              in: query.characters,
+            },
+          },
+        },
+      };
+    }
+
+    // =========================
+    // ARTISTS
+    // =========================
+
+    if (query.artists?.length) {
+      where.comic_artists = {
+        some: {
+          tb_artists: {
+            slug: {
+              in: query.artists,
+            },
+          },
+        },
+      };
+    }
+
+    // =========================
+    // GROUPS
+    // =========================
+
+    if (query.groups?.length) {
+      where.comic_groups = {
+        some: {
+          tb_groups: {
+            slug: {
+              in: query.groups,
+            },
+          },
+        },
+      };
+    }
+
+    // =========================
+    // AUTHORS
+    // =========================
+
+    if (query.authors?.length) {
+      where.comic_authors = {
+        some: {
+          tb_authors: {
+            slug: {
+              in: query.authors,
             },
           },
         },
@@ -838,7 +924,10 @@ export class ComicsService {
       // =========================
       // PARODIES
       // =========================
-      for (const item of this.splitMetadata(metadata.parodies)) {
+      const uniqueParodies = [
+        ...new Set(this.splitMetadata(metadata.parodies)),
+      ];
+      for (const item of uniqueParodies) {
         const parody = await this.upsertEntity(tx.tb_parodies, item);
         await tx.comic_parodies.create({
           data: {
@@ -851,7 +940,10 @@ export class ComicsService {
       // =========================
       // CHARACTERS
       // =========================
-      for (const item of this.splitMetadata(metadata.characters)) {
+      const uniqueCharacters = [
+        ...new Set(this.splitMetadata(metadata.characters)),
+      ];
+      for (const item of uniqueCharacters) {
         const character = await this.upsertEntity(tx.tb_characters, item);
         await tx.comic_characters.create({
           data: {
@@ -864,7 +956,8 @@ export class ComicsService {
       // =========================
       // ARTISTS
       // =========================
-      for (const item of this.splitMetadata(metadata.artists)) {
+      const uniqueArtists = [...new Set(this.splitMetadata(metadata.artists))];
+      for (const item of uniqueArtists) {
         const artist = await this.upsertEntity(tx.tb_artists, item);
         await tx.comic_artists.create({
           data: {
@@ -877,7 +970,8 @@ export class ComicsService {
       // =========================
       // AUTHORS
       // =========================
-      for (const item of this.splitMetadata(metadata.authors)) {
+      const uniqueAuthors = [...new Set(this.splitMetadata(metadata.authors))];
+      for (const item of uniqueAuthors) {
         const author = await this.upsertEntity(tx.tb_authors, item);
         await tx.comic_authors.create({
           data: {
@@ -890,7 +984,8 @@ export class ComicsService {
       // =========================
       // GROUPS
       // =========================
-      for (const item of this.splitMetadata(metadata.groups)) {
+      const uniqueGroups = [...new Set(this.splitMetadata(metadata.groups))];
+      for (const item of uniqueGroups) {
         const group = await this.upsertEntity(tx.tb_groups, item);
         await tx.comic_groups.create({
           data: {
@@ -901,9 +996,10 @@ export class ComicsService {
       }
 
       // =========================
-      // TAGS
+      // TAGS (Titik Utama Error P2002)
       // =========================
-      for (const item of this.splitMetadata(metadata.tags)) {
+      const uniqueTags = [...new Set(this.splitMetadata(metadata.tags))];
+      for (const item of uniqueTags) {
         const tag = await this.upsertEntity(tx.tb_tags, item);
         await tx.comic_tags.create({
           data: {
@@ -953,6 +1049,19 @@ export class ComicsService {
             `censorship_id is required for chapter ${chapterNumber}`,
           );
         }
+
+        // --- TAMBAHKAN VALIDASI PENGECEKAN INI ---
+        // Sesuaikan 'tx.censorships' atau 'tx.tb_censorships' dengan nama model yang ada di schema.prisma kamu
+        const isCensorshipExist = await tx.censorships.findUnique({
+          where: { id: censorshipId },
+        });
+
+        if (!isCensorshipExist) {
+          throw new BadRequestException(
+            `Censorship ID '${censorshipId}' tidak ditemukan di database untuk chapter ${chapterNumber}`,
+          );
+        }
+        // ----------------------------------------
 
         // =========================
         // CREATE CHAPTER
