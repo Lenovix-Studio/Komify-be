@@ -11,6 +11,7 @@ import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import slugify from 'slugify';
 import { CreateChapterDto } from '../chapters/dto/create-chapter.dto';
+import * as sharp from 'sharp';
 
 @Injectable()
 export class ComicsService {
@@ -901,10 +902,17 @@ export class ComicsService {
 
     await fs.mkdir(comicDir, { recursive: true });
 
-    const coverExt = path.extname(coverFile.originalname || '') || '.jpg';
-    const coverFilename = `cover${coverExt}`;
+    const coverFilename = `cover.webp`;
     const coverSavePath = path.join(comicDir, coverFilename);
-    await fs.writeFile(coverSavePath, coverFile.buffer);
+    try {
+      await sharp
+        .default(coverFile.buffer, { animated: true })
+        .webp({ quality: 85 })
+        .toFile(coverSavePath);
+    } catch (err) {
+      throw new BadRequestException('Gagal mengonversi cover ke format WebP');
+    }
+
     const preparedChapters: any[] = [];
 
     for (const chapterData of document.chapters) {
@@ -935,17 +943,27 @@ export class ComicsService {
       const pagesPayload: any[] = [];
       for (let i = 0; i < chapterFiles.length; i++) {
         const file = chapterFiles[i];
-        const ext = path.extname(file.originalname || '') || '.jpg';
-        const filename = `page${i + 1}${ext}`;
+        const filename = `page${i + 1}.webp`;
         const savePath = path.join(chapterDir, filename);
-        await fs.writeFile(savePath, file.buffer);
+
+        let webpInfo: sharp.OutputInfo;
+        try {
+          webpInfo = await sharp
+            .default(file.buffer, { animated: true })
+            .webp({ quality: 80 })
+            .toFile(savePath);
+        } catch (err) {
+          throw new BadRequestException(
+            `Gagal mengonversi halaman ${i + 1} di chapter ${chapterNumber}`,
+          );
+        }
 
         pagesPayload.push({
           chapter_id: chapterId,
           page_number: i + 1,
           filename,
           filepath: `${STATIC_PREFIX}/${legacyId}/chapters/${chapterNumber}/${filename}`,
-          filesize: BigInt(file.size),
+          filesize: BigInt(webpInfo.size),
         });
       }
 
@@ -986,7 +1004,7 @@ export class ComicsService {
 
         const metadata = document.metadata;
 
-        // METADATA INSERTS (Parodies, Characters, Artists, Authors, Groups, Tags)
+        // METADATA INSERTS
         const metadataTypes = [
           {
             data: metadata.parodies,
@@ -1039,7 +1057,7 @@ export class ComicsService {
           }
         }
 
-        // INSERTS CHAPTERS & PAGES FROM PREPARED DATA
+        // INSERTS CHAPTERS & PAGES
         for (const ch of preparedChapters) {
           const isCensorshipExist = await tx.censorships.findUnique({
             where: { id: ch.censorship_id },
@@ -1047,11 +1065,10 @@ export class ComicsService {
 
           if (!isCensorshipExist) {
             throw new BadRequestException(
-              `Censorship ID '${ch.censorship_id}' tidak ditemukan di database untuk chapter ${ch.chapter_number}`,
+              `Censorship ID '${ch.censorship_id}' tidak ditemukan untuk chapter ${ch.chapter_number}`,
             );
           }
 
-          // CREATE CHAPTER
           await tx.chapters.create({
             data: {
               id: ch.id,
@@ -1064,7 +1081,6 @@ export class ComicsService {
             },
           });
 
-          // BULK INSERT PAGES
           await tx.pages.createMany({
             data: ch.pagesPayload,
           });
@@ -1081,6 +1097,7 @@ export class ComicsService {
       },
     );
   }
+
   // API to get chapter details by comic ID and chapter ID
   async getChapterDetail(comicId: string, chapterId: string) {
     const result = await this.prisma.$queryRawUnsafe(
