@@ -1,6 +1,8 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import * as puppeteer from 'puppeteer';
 import { NhentaiExtractor } from './extractors/nhentai.extractor';
+import { ImhentaiExtractor } from './extractors/imhentai.extractor';
+import { NhentaicomExtractor } from './extractors/nhentaicom.extractor';
 
 @Injectable()
 export class ScraperService {
@@ -60,6 +62,20 @@ export class ScraperService {
       // =========================
       if (url.includes('nhentai.net')) {
         return new NhentaiExtractor().extract(html);
+      }
+
+      // =========================
+      // NHENTAI.COM
+      // =========================
+      if (url.includes('nhentai.com')) {
+        return new NhentaicomExtractor().extract(html);
+      }
+
+      // =========================
+      // IMHENTAI
+      // =========================
+      if (url.includes('imhentai.xxx')) {
+        return new ImhentaiExtractor().extract(html);
       }
 
       throw new BadRequestException('unsupported source');
