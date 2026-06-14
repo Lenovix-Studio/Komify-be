@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import * as sharp from 'sharp';
 
 @Injectable()
 export class ChaptersService {
@@ -297,11 +298,6 @@ export class ChaptersService {
         });
       }
 
-      // =========================
-      // TEMP PAGE NUMBER SHIFT
-      // AVOID UNIQUE CONSTRAINT
-      // =========================
-      // Only shift existing pages that will be kept or replaced (not new creates)
       const existingPages = document.pages.filter(
         (x) => x.id && (x.action === 'keep' || x.action === 'replace'),
       );
@@ -331,9 +327,9 @@ export class ChaptersService {
         });
       }
 
-      // =========================
-      // REPLACE PAGES
-      // =========================
+      // ================================================================
+      // UPDATED: REPLACE PAGES (CONVERT TO WEBP)
+      // ================================================================
       const replacePages = document.pages.filter((x) => x.action === 'replace');
 
       for (const page of replacePages) {
@@ -355,7 +351,6 @@ export class ChaptersService {
           );
         }
 
-        // delete old file
         try {
           const relativePath = existingPage.filepath.replace(STATIC_PREFIX, '');
           const fullPath = path.join(STATIC_DIR, relativePath);
@@ -365,10 +360,23 @@ export class ChaptersService {
           console.error(error);
         }
 
-        const ext = path.extname(uploadedFile.originalname) || '.jpg';
-        const filename = `page${page.page_number}${ext}`;
+        const filename = `page${page.page_number}.webp`;
         const savePath = path.join(chapterDir, filename);
-        await fs.writeFile(savePath, uploadedFile.buffer);
+        const isGif =
+          uploadedFile.mimetype === 'image/gif' ||
+          uploadedFile.originalname?.toLowerCase().endsWith('.gif');
+        let webpInfo: sharp.OutputInfo;
+        try {
+          webpInfo = await sharp
+            .default(uploadedFile.buffer, isGif ? { animated: true } : {})
+            .webp({ quality: 80 })
+            .toFile(savePath);
+        } catch (err) {
+          throw new BadRequestException(
+            `Gagal mengonversi file pengganti halaman ${page.page_number} ke WebP`,
+          );
+        }
+
         await tx.pages.update({
           where: {
             id: page.id,
@@ -379,14 +387,14 @@ export class ChaptersService {
             filepath:
               `${STATIC_PREFIX}/${comicLegacyId}` +
               `/chapters/${chapter.chapter_number}/${filename}`,
-            filesize: BigInt(uploadedFile.size),
+            filesize: BigInt(webpInfo.size),
           },
         });
       }
 
-      // =========================
-      // CREATE NEW PAGES
-      // =========================
+      // ================================================================
+      // UPDATED: CREATE NEW PAGES (CONVERT TO WEBP)
+      // ================================================================
       const createPages = document.pages.filter((x) => x.action === 'create');
       for (const page of createPages) {
         const uploadedFile = files.find(
@@ -399,10 +407,23 @@ export class ChaptersService {
           );
         }
 
-        const ext = path.extname(uploadedFile.originalname) || '.jpg';
-        const filename = `page${page.page_number}${ext}`;
+        const filename = `page${page.page_number}.webp`;
         const savePath = path.join(chapterDir, filename);
-        await fs.writeFile(savePath, uploadedFile.buffer);
+        const isGif =
+          uploadedFile.mimetype === 'image/gif' ||
+          uploadedFile.originalname?.toLowerCase().endsWith('.gif');
+        let webpInfo: sharp.OutputInfo;
+        try {
+          webpInfo = await sharp
+            .default(uploadedFile.buffer, isGif ? { animated: true } : {})
+            .webp({ quality: 80 })
+            .toFile(savePath);
+        } catch (err) {
+          throw new BadRequestException(
+            `Gagal mengonversi halaman baru ${page.page_number} ke WebP`,
+          );
+        }
+
         await tx.pages.create({
           data: {
             chapter_id: chapterId,
@@ -411,7 +432,7 @@ export class ChaptersService {
             filepath:
               `${STATIC_PREFIX}/${comicLegacyId}` +
               `/chapters/${chapter.chapter_number}/${filename}`,
-            filesize: BigInt(uploadedFile.size),
+            filesize: BigInt(webpInfo.size),
           },
         });
       }

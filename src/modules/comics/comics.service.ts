@@ -414,12 +414,15 @@ export class ComicsService {
     };
   }
 
-  // CREATE CHAPTER
+  // ================================================================
+  // HELPER: SAVE CHAPTER PAGE & CONVERT TO WEBP
+  // ================================================================
   private async saveChapterPage(
     legacyId: number | bigint,
     chapterNumber: string,
     file: Express.Multer.File,
-  ) {
+    pageNumber: number,
+  ): Promise<{ filepath: string; filesize: bigint; filename: string }> {
     const STATIC_DIR = this.configService.get<string>('STATIC_DIR');
     const STATIC_PREFIX = this.configService.get<string>('STATIC_PREFIX');
     if (!STATIC_DIR || !STATIC_PREFIX) {
@@ -436,18 +439,39 @@ export class ComicsService {
       recursive: true,
     });
 
-    const filename = file.originalname;
+    const filename = `page${pageNumber}.webp`;
     const fullPath = path.join(baseDir, filename);
-    await fs.writeFile(fullPath, file.buffer);
-    return `${STATIC_PREFIX}/${legacyId}/chapters/${chapterNumber}/${filename}`;
+    const isGif =
+      file.mimetype === 'image/gif' ||
+      file.originalname?.toLowerCase().endsWith('.gif');
+    let webpInfo: sharp.OutputInfo;
+    try {
+      webpInfo = await sharp
+        .default(file.buffer, isGif ? { animated: true } : {})
+        .webp({ quality: 80 })
+        .toFile(fullPath);
+    } catch (err) {
+      throw new BadRequestException(
+        `Gagal mengonversi halaman ${pageNumber} ke format WebP di chapter ${chapterNumber}`,
+      );
+    }
+
+    return {
+      filepath: `${STATIC_PREFIX}/${legacyId}/chapters/${chapterNumber}/${filename}`,
+      filesize: BigInt(webpInfo.size),
+      filename,
+    };
   }
+
+  // ================================================================
+  // API TO CREATE A NEW CHAPTER FOR A COMIC
+  // ================================================================
   async createChapter(
     comicId: string,
     dto: CreateChapterDto,
     files: Express.Multer.File[],
   ) {
     return this.prisma.$transaction(async (tx) => {
-      // Validate
       const comic = await tx.comics.findUnique({
         where: {
           id: comicId,
@@ -528,7 +552,6 @@ export class ComicsService {
         },
       });
 
-      // Save pages
       for (const page of dto.pages) {
         const uploadedFile = files.find((f) => f.fieldname === page.temp_id);
         if (!uploadedFile) {
@@ -537,23 +560,24 @@ export class ComicsService {
           );
         }
 
-        const filepath = await this.saveChapterPage(
+        const { filepath, filesize, filename } = await this.saveChapterPage(
           comic.legacy_id,
           dto.chapter_number,
           uploadedFile,
+          page.page_number,
         );
+
         await tx.pages.create({
           data: {
             chapter_id: chapter.id,
             page_number: page.page_number,
-            filename: uploadedFile.originalname,
+            filename,
             filepath,
-            filesize: BigInt(uploadedFile.size),
+            filesize,
           },
         });
       }
 
-      // Update total chapters in comic
       const totalChapters = await tx.chapters.count({
         where: {
           comic_id: comicId,
@@ -662,14 +686,27 @@ export class ComicsService {
     // =========================
     let coverPath = existingComic.cover_path;
 
-    // =========================
-    // REPLACE COVER
-    // =========================
+    // ================================================================
+    // MODIFIKASI DISINI: REPLACE COVER & CONVERT TO WEBP
+    // ================================================================
     if (coverFile) {
-      const coverExt = path.extname(coverFile.originalname || '') || '.jpg';
-      const coverFilename = `cover${coverExt}`;
+      const coverFilename = `cover.webp`;
       const coverSavePath = path.join(comicDir, coverFilename);
-      await fs.writeFile(coverSavePath, coverFile.buffer);
+      const isGif =
+        coverFile.mimetype === 'image/gif' ||
+        coverFile.originalname?.toLowerCase().endsWith('.gif');
+
+      try {
+        await sharp
+          .default(coverFile.buffer, isGif ? { animated: true } : {})
+          .webp({ quality: 85 })
+          .toFile(coverSavePath);
+      } catch (err) {
+        throw new BadRequestException(
+          'Gagal mengonversi cover baru ke format WebP',
+        );
+      }
+
       coverPath = `${STATIC_PREFIX}/${existingComic.legacy_id}/${coverFilename}`;
     }
 
@@ -698,128 +735,63 @@ export class ComicsService {
       // =========================
       // DELETE OLD RELATIONS
       // =========================
-      await tx.comic_parodies.deleteMany({
-        where: {
-          comic_id: comicId,
-        },
-      });
-
-      await tx.comic_characters.deleteMany({
-        where: {
-          comic_id: comicId,
-        },
-      });
-
-      await tx.comic_artists.deleteMany({
-        where: {
-          comic_id: comicId,
-        },
-      });
-
-      await tx.comic_authors.deleteMany({
-        where: {
-          comic_id: comicId,
-        },
-      });
-
-      await tx.comic_groups.deleteMany({
-        where: {
-          comic_id: comicId,
-        },
-      });
-
-      await tx.comic_tags.deleteMany({
-        where: {
-          comic_id: comicId,
-        },
-      });
+      await tx.comic_parodies.deleteMany({ where: { comic_id: comicId } });
+      await tx.comic_characters.deleteMany({ where: { comic_id: comicId } });
+      await tx.comic_artists.deleteMany({ where: { comic_id: comicId } });
+      await tx.comic_authors.deleteMany({ where: { comic_id: comicId } });
+      await tx.comic_groups.deleteMany({ where: { comic_id: comicId } });
+      await tx.comic_tags.deleteMany({ where: { comic_id: comicId } });
 
       // =========================
       // METADATA
       // =========================
       const metadata = document.metadata;
 
-      // =========================
       // PARODIES
-      // =========================
       for (const item of this.splitMetadata(metadata.parodies)) {
         const parody = await this.upsertEntity(tx.tb_parodies, item);
-
         await tx.comic_parodies.create({
-          data: {
-            comic_id: comicId,
-            parody_id: parody.id,
-          },
+          data: { comic_id: comicId, parody_id: parody.id },
         });
       }
 
-      // =========================
       // CHARACTERS
-      // =========================
       for (const item of this.splitMetadata(metadata.characters)) {
         const character = await this.upsertEntity(tx.tb_characters, item);
-
         await tx.comic_characters.create({
-          data: {
-            comic_id: comicId,
-            character_id: character.id,
-          },
+          data: { comic_id: comicId, character_id: character.id },
         });
       }
 
-      // =========================
       // ARTISTS
-      // =========================
       for (const item of this.splitMetadata(metadata.artists)) {
         const artist = await this.upsertEntity(tx.tb_artists, item);
-
         await tx.comic_artists.create({
-          data: {
-            comic_id: comicId,
-            artist_id: artist.id,
-          },
+          data: { comic_id: comicId, artist_id: artist.id },
         });
       }
 
-      // =========================
       // AUTHORS
-      // =========================
       for (const item of this.splitMetadata(metadata.authors)) {
         const author = await this.upsertEntity(tx.tb_authors, item);
-
         await tx.comic_authors.create({
-          data: {
-            comic_id: comicId,
-            author_id: author.id,
-          },
+          data: { comic_id: comicId, author_id: author.id },
         });
       }
 
-      // =========================
       // GROUPS
-      // =========================
       for (const item of this.splitMetadata(metadata.groups)) {
         const group = await this.upsertEntity(tx.tb_groups, item);
-
         await tx.comic_groups.create({
-          data: {
-            comic_id: comicId,
-            group_id: group.id,
-          },
+          data: { comic_id: comicId, group_id: group.id },
         });
       }
 
-      // =========================
       // TAGS
-      // =========================
       for (const item of this.splitMetadata(metadata.tags)) {
         const tag = await this.upsertEntity(tx.tb_tags, item);
-
         await tx.comic_tags.create({
-          data: {
-            comic_id: comicId,
-            tag_id: tag.id,
-          },
+          data: { comic_id: comicId, tag_id: tag.id },
         });
       }
 
@@ -945,11 +917,13 @@ export class ComicsService {
         const file = chapterFiles[i];
         const filename = `page${i + 1}.webp`;
         const savePath = path.join(chapterDir, filename);
-
+        const isGif =
+          file.mimetype === 'image/gif' ||
+          file.originalname?.toLowerCase().endsWith('.gif');
         let webpInfo: sharp.OutputInfo;
         try {
           webpInfo = await sharp
-            .default(file.buffer, { animated: true })
+            .default(file.buffer, isGif ? { animated: true } : {})
             .webp({ quality: 80 })
             .toFile(savePath);
         } catch (err) {
