@@ -510,10 +510,6 @@ export class ComicsService {
         throw new ConflictException('chapter already exists');
       }
 
-      if (dto.pages?.length === 0) {
-        throw new BadRequestException('chapter must contain at least 1 page');
-      }
-
       if (files.length !== dto.pages?.length) {
         throw new BadRequestException(
           `pages count (${dto.pages?.length}) does not match uploaded files (${files.length})`,
@@ -907,9 +903,6 @@ export class ComicsService {
       const chapterFiles = files.filter(
         (f) => f.fieldname === `pages_${chapterData.id}`,
       );
-      if (!chapterFiles.length) {
-        throw new BadRequestException(`chapter ${chapterNumber} has no pages`);
-      }
 
       const censorshipId = chapterData.censorship_id;
       if (!censorshipId) {
