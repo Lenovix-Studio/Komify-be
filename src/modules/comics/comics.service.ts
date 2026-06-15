@@ -841,9 +841,6 @@ export class ComicsService {
     // COVER
     // =========================
     const coverFile = files.find((f) => f.fieldname === 'cover');
-    if (!coverFile) {
-      throw new BadRequestException('cover is required');
-    }
 
     // =========================
     // STATUS
@@ -875,14 +872,23 @@ export class ComicsService {
     await fs.mkdir(comicDir, { recursive: true });
 
     const coverFilename = `cover.webp`;
-    const coverSavePath = path.join(comicDir, coverFilename);
-    try {
-      await sharp
-        .default(coverFile.buffer, { animated: true })
-        .webp({ quality: 85 })
-        .toFile(coverSavePath);
-    } catch (err) {
-      throw new BadRequestException('Gagal mengonversi cover ke format WebP');
+    let coverPath = `${STATIC_PREFIX}/default/cover.webp`;
+    if (coverFile) {
+      const coverSavePath = path.join(comicDir, coverFilename);
+      const isGif =
+        coverFile.mimetype === 'image/gif' ||
+        coverFile.originalname?.toLowerCase().endsWith('.gif');
+
+      try {
+        await sharp
+          .default(coverFile.buffer, isGif ? { animated: true } : {})
+          .webp({ quality: 85 })
+          .toFile(coverSavePath);
+
+        coverPath = `${STATIC_PREFIX}/${legacyId}/${coverFilename}`;
+      } catch (err) {
+        throw new BadRequestException('Gagal mengonversi cover ke format WebP');
+      }
     }
 
     const preparedChapters: any[] = [];
@@ -969,7 +975,7 @@ export class ComicsService {
             description: document.metadata.description || null,
             category_id: category.id,
             status_id: status.id,
-            cover_path: `${STATIC_PREFIX}/${finalLegacyId}/${coverFilename}`,
+            cover_path: coverPath,
             total_chapters: document.chapters.length,
             created_at: new Date(),
             updated_at: new Date(),
