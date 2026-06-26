@@ -12,6 +12,17 @@ import { ConfigService } from '@nestjs/config';
 import slugify from 'slugify';
 import { CreateChapterDto } from '../chapters/dto/create-chapter.dto';
 import * as sharp from 'sharp';
+import * as os from 'os';
+import { execFile, spawn } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
+
+type NormalizedPage = {
+  pageNumber: number;
+  buffer: Buffer;
+  animated: boolean;
+};
 
 @Injectable()
 export class ComicsService {
@@ -64,6 +75,233 @@ export class ComicsService {
       },
     });
     return Number(lastComic?.legacy_id || 0) + 1;
+  }
+
+  // HELPER: EXECUTE POPPLER
+  private async executePoppler(
+    pdfPath: string,
+    outputPrefix: string,
+  ): Promise<void> {
+    const POPPLER_PATH = this.configService.get<string>('POPPLER_PATH');
+    const DPI = this.configService.get<string>('PDF_RENDER_DPI') ?? '200';
+
+    if (!POPPLER_PATH) {
+      throw new BadRequestException('POPPLER_PATH is not configured');
+    }
+
+    const exe = path.join(
+      POPPLER_PATH,
+      process.platform === 'win32' ? 'pdftoppm.exe' : 'pdftoppm',
+    );
+
+    try {
+      await fs.access(exe);
+    } catch {
+      throw new BadRequestException(`Poppler binary not found: ${exe}`);
+    }
+
+    const args = ['-png', '-r', DPI, pdfPath, outputPrefix];
+
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(exe, args, {
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      child.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      child.on('error', (err) => {
+        console.error('========== POPPLER SPAWN ERROR ==========');
+        console.error(err);
+        console.error('=========================================');
+
+        reject(
+          new BadRequestException(`Failed to start Poppler: ${err.message}`),
+        );
+      });
+
+      child.on('close', (code, signal) => {
+        if (code === 0) {
+          return resolve();
+        }
+
+        console.error('========== POPPLER ERROR ==========');
+        console.error('Executable:', exe);
+        console.error('Args:', args.join(' '));
+        console.error('Exit Code:', code);
+        console.error('Signal:', signal);
+        console.error('stdout:', stdout);
+        console.error('stderr:', stderr);
+        console.error('===================================');
+
+        reject(
+          new BadRequestException(
+            stderr || `Poppler exited with code=${code} signal=${signal}`,
+          ),
+        );
+      });
+    });
+  }
+
+  private isPdf(file: Express.Multer.File): boolean {
+    return (
+      file.mimetype === 'application/pdf' ||
+      file.originalname.toLowerCase().endsWith('.pdf')
+    );
+  }
+
+  private isGif(file: Express.Multer.File): boolean {
+    return (
+      file.mimetype === 'image/gif' ||
+      file.originalname.toLowerCase().endsWith('.gif')
+    );
+  }
+
+  private async normalizeImagePages(
+    files: Express.Multer.File[],
+  ): Promise<NormalizedPage[]> {
+    return files.map((file, index) => ({
+      pageNumber: index + 1,
+      buffer: file.buffer,
+      animated: this.isGif(file),
+    }));
+  }
+
+  private async normalizePdfPages(
+    file: Express.Multer.File,
+  ): Promise<NormalizedPage[]> {
+    const tempDir = await this.createTempDirectory();
+
+    try {
+      const pdfPath = path.join(tempDir, 'chapter.pdf');
+
+      await fs.writeFile(pdfPath, file.buffer);
+
+      const outputPrefix = path.join(tempDir, 'page');
+
+      await this.executePoppler(pdfPath, outputPrefix);
+
+      const rendered = await fs.readdir(tempDir);
+
+      const imageFiles = rendered
+        .filter((name) => /^page-\d+\.png$/i.test(name))
+        .sort((a, b) =>
+          a.localeCompare(b, undefined, {
+            numeric: true,
+          }),
+        );
+
+      if (!imageFiles.length) {
+        throw new BadRequestException('No pages were rendered from PDF.');
+      }
+
+      const pages: NormalizedPage[] = [];
+
+      for (let i = 0; i < imageFiles.length; i++) {
+        pages.push({
+          pageNumber: i + 1,
+          buffer: await fs.readFile(path.join(tempDir, imageFiles[i])),
+          animated: false,
+        });
+      }
+
+      return pages;
+    } finally {
+      await this.removeTempDirectory(tempDir);
+    }
+  }
+
+  // HELPER: NORMALIZE CHAPTER PAGES
+  private async normalizePages(
+    files: Express.Multer.File[],
+  ): Promise<NormalizedPage[]> {
+    if (!files.length) {
+      return [];
+    }
+
+    const pdfFiles = files.filter((f) => this.isPdf(f));
+
+    if (pdfFiles.length > 1) {
+      throw new BadRequestException(
+        'Only one PDF file can be uploaded per chapter.',
+      );
+    }
+
+    if (pdfFiles.length === 1 && files.length > 1) {
+      throw new BadRequestException(
+        'Cannot upload PDF together with image files.',
+      );
+    }
+
+    if (pdfFiles.length === 1) {
+      return await this.normalizePdfPages(pdfFiles[0]);
+    }
+
+    return this.normalizeImagePages(files);
+  }
+
+  // HELPER: CREATE TEMP DIRECTORY
+  private async createTempDirectory(prefix = 'komify-'): Promise<string> {
+    return await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  }
+
+  // HELPER: REMOVE TEMP DIRECTORY
+  private async removeTempDirectory(dir: string): Promise<void> {
+    try {
+      await fs.rm(dir, {
+        recursive: true,
+        force: true,
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  // HELPER: PREPARE CHAPTER PAGES
+  private async prepareChapterPages(
+    legacyId: number | bigint,
+    chapterId: string,
+    chapterNumber: string,
+    pages: NormalizedPage[],
+  ) {
+    const pagesPayload: {
+      chapter_id: string;
+      page_number: number;
+      filename: string;
+      filepath: string;
+      filesize: bigint;
+    }[] = [];
+
+    for (const page of pages) {
+      const { filepath, filesize, filename } = await this.saveChapterPage(
+        legacyId,
+        chapterNumber,
+        page.buffer,
+        page.pageNumber,
+        {
+          animated: page.animated,
+        },
+      );
+
+      pagesPayload.push({
+        chapter_id: chapterId,
+        page_number: page.pageNumber,
+        filename,
+        filepath,
+        filesize,
+      });
+    }
+
+    return pagesPayload;
   }
 
   // API to get a random comic
@@ -420,11 +658,20 @@ export class ComicsService {
   private async saveChapterPage(
     legacyId: number | bigint,
     chapterNumber: string,
-    file: Express.Multer.File,
+    buffer: Buffer,
     pageNumber: number,
-  ): Promise<{ filepath: string; filesize: bigint; filename: string }> {
+    options?: {
+      animated?: boolean;
+      quality?: number;
+    },
+  ): Promise<{
+    filepath: string;
+    filesize: bigint;
+    filename: string;
+  }> {
     const STATIC_DIR = this.configService.get<string>('STATIC_DIR');
     const STATIC_PREFIX = this.configService.get<string>('STATIC_PREFIX');
+
     if (!STATIC_DIR || !STATIC_PREFIX) {
       throw new BadRequestException('STATIC_DIR or STATIC_PREFIX missing');
     }
@@ -435,24 +682,28 @@ export class ComicsService {
       'chapters',
       chapterNumber,
     );
+
     await fs.mkdir(baseDir, {
       recursive: true,
     });
 
     const filename = `page${pageNumber}.webp`;
     const fullPath = path.join(baseDir, filename);
-    const isGif =
-      file.mimetype === 'image/gif' ||
-      file.originalname?.toLowerCase().endsWith('.gif');
+
+    const quality = options?.quality ?? 80;
+
     let webpInfo: sharp.OutputInfo;
+
     try {
       webpInfo = await sharp
-        .default(file.buffer, isGif ? { animated: true } : {})
-        .webp({ quality: 80 })
+        .default(buffer, options?.animated ? { animated: true } : {})
+        .webp({
+          quality,
+        })
         .toFile(fullPath);
     } catch (err) {
       throw new BadRequestException(
-        `Gagal mengonversi halaman ${pageNumber} ke format WebP di chapter ${chapterNumber}`,
+        `Failed to convert page ${pageNumber} to WebP for chapter ${chapterNumber}`,
       );
     }
 
@@ -548,31 +799,18 @@ export class ComicsService {
         },
       });
 
-      for (const page of dto.pages) {
-        const uploadedFile = files.find((f) => f.fieldname === page.temp_id);
-        if (!uploadedFile) {
-          throw new BadRequestException(
-            `missing file for temp_id ${page.temp_id}`,
-          );
-        }
+      const normalizedPages = await this.normalizePages(files);
 
-        const { filepath, filesize, filename } = await this.saveChapterPage(
-          comic.legacy_id,
-          dto.chapter_number,
-          uploadedFile,
-          page.page_number,
-        );
+      const pagesPayload = await this.prepareChapterPages(
+        comic.legacy_id,
+        chapter.id,
+        dto.chapter_number,
+        normalizedPages,
+      );
 
-        await tx.pages.create({
-          data: {
-            chapter_id: chapter.id,
-            page_number: page.page_number,
-            filename,
-            filepath,
-            filesize,
-          },
-        });
-      }
+      await tx.pages.createMany({
+        data: pagesPayload,
+      });
 
       const totalChapters = await tx.chapters.count({
         where: {
@@ -897,9 +1135,6 @@ export class ComicsService {
           ? `${mainPadded}.${chapterData.sub}`
           : mainPadded;
 
-      const chapterDir = path.join(comicDir, 'chapters', chapterNumber);
-      await fs.mkdir(chapterDir, { recursive: true });
-
       const chapterFiles = files.filter(
         (f) => f.fieldname === `pages_${chapterData.id}`,
       );
@@ -911,34 +1146,13 @@ export class ComicsService {
         );
       }
 
-      const pagesPayload: any[] = [];
-      for (let i = 0; i < chapterFiles.length; i++) {
-        const file = chapterFiles[i];
-        const filename = `page${i + 1}.webp`;
-        const savePath = path.join(chapterDir, filename);
-        const isGif =
-          file.mimetype === 'image/gif' ||
-          file.originalname?.toLowerCase().endsWith('.gif');
-        let webpInfo: sharp.OutputInfo;
-        try {
-          webpInfo = await sharp
-            .default(file.buffer, isGif ? { animated: true } : {})
-            .webp({ quality: 80 })
-            .toFile(savePath);
-        } catch (err) {
-          throw new BadRequestException(
-            `Gagal mengonversi halaman ${i + 1} di chapter ${chapterNumber}`,
-          );
-        }
-
-        pagesPayload.push({
-          chapter_id: chapterId,
-          page_number: i + 1,
-          filename,
-          filepath: `${STATIC_PREFIX}/${legacyId}/chapters/${chapterNumber}/${filename}`,
-          filesize: BigInt(webpInfo.size),
-        });
-      }
+      const normalizedPages = await this.normalizePages(chapterFiles);
+      const pagesPayload = await this.prepareChapterPages(
+        legacyId,
+        chapterId,
+        chapterNumber,
+        normalizedPages,
+      );
 
       preparedChapters.push({
         id: chapterId,
