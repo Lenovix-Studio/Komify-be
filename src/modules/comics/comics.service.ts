@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   ConflictException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
 import * as fs from 'fs/promises';
@@ -306,27 +307,37 @@ export class ComicsService {
 
   // API to get a random comic
   async getRandomComic() {
-    const count = await this.prisma.comics.count();
-    if (count === 0) {
-      throw new NotFoundException('no comic found');
-    }
+    try {
+      const count = await this.prisma.comics.count();
+      if (count === 0) {
+        throw new NotFoundException('No comics available in database');
+      }
 
-    const randomIndex = Math.floor(Math.random() * count);
-    const comic = await this.prisma.comics.findFirst({
-      skip: randomIndex,
-      select: {
-        id: true,
-        title: true,
-        seo_slug: true,
-        cover_path: true,
-        total_chapters: true,
-      },
-    });
+      const randomIndex = Math.floor(Math.random() * count);
+      const comics = await this.prisma.comics.findMany({
+        take: 1,
+        skip: randomIndex,
+        select: {
+          id: true,
+          title: true,
+          seo_slug: true,
+          cover_path: true,
+          total_chapters: true,
+        },
+      });
 
-    if (!comic) {
-      throw new NotFoundException('no comic found');
+      if (!comics || comics.length === 0) {
+        throw new NotFoundException('No comic found');
+      }
+
+      return comics[0];
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error('Error fetching random comic:', error);
+      throw new InternalServerErrorException('Failed to fetch random comic');
     }
-    return comic;
   }
 
   // API to get all comics with pagination and filtering
