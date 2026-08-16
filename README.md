@@ -1,3 +1,16 @@
+install depedensi:
+bun i
+
+run development:
+bun run dev:bun
+
+run build:
+bun run build
+
+run production:
+bun run start:bun
+
+
 # Panduan Pengembangan dan Produksi
 
 Dokumentasi ini berisi perintah-perintah penting untuk menjalankan aplikasi dalam mode pengembangan (development), produksi (production), serta pengelolaan basis data menggunakan Prisma.
