@@ -1316,7 +1316,7 @@ export class ComicsService {
   }
 
   // API to get homepage comics with pagination
-  async getHomepageComics(page = 1, limit = 10) {
+  async getHomepageComics(page = 1, limit = 12) {
     const result = await this.prisma.$queryRawUnsafe(
       `
     SELECT fn_get_homepage_comics(

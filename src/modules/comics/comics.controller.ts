@@ -139,7 +139,7 @@ export class ComicsController {
   ) {
     return this.comicsService.getHomepageComics(
       Number(page || 1),
-      Number(limit || 10),
+      Number(limit || 12),
     );
   }
 
