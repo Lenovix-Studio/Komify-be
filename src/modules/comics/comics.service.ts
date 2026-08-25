@@ -963,7 +963,6 @@ export class ComicsService {
             title: document.metadata.title,
             alternative_title: document.metadata.alternative_title || null,
             description: document.metadata.description || null,
-            category_id: category.id,
             status_id: status.id,
             cover_path: coverPath,
             updated_at: new Date(),
