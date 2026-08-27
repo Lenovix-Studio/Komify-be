@@ -6,6 +6,26 @@ import * as fs from 'fs/promises';
 export class SystemService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Get all active categories
+  async getCategories() {
+    return this.prisma.categories.findMany({
+      where: {
+        deleted_at: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        created_at: true,
+        updated_at: true,
+        deleted_at: true,
+      },
+      orderBy: {
+        name: 'asc',
+      },
+    });
+  }
+
   // Gets statuses from the database
   async getStatuses() {
     const result = await this.prisma.$queryRawUnsafe<

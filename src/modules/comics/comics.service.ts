@@ -911,10 +911,20 @@ export class ComicsService {
       // =========================
       // VALIDATE CATEGORY
       // =========================
+      const categoryInput = document.template || document.metadata?.category;
+
+      if (!categoryInput) {
+        throw new BadRequestException('category is required');
+      }
+
+      // Cek apakah categoryInput berupa format UUID (v4/standard)
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          categoryInput,
+        );
+
       const category = await this.prisma.categories.findFirst({
-        where: {
-          slug: document.template,
-        },
+        where: isUuid ? { id: categoryInput } : { slug: categoryInput },
       });
 
       if (!category) {
@@ -964,6 +974,7 @@ export class ComicsService {
             alternative_title: document.metadata.alternative_title || null,
             description: document.metadata.description || null,
             status_id: status.id,
+            category_id: category.id,
             cover_path: coverPath,
             updated_at: new Date(),
           },

@@ -16,6 +16,12 @@ import { SystemService } from './system.service';
 export class SystemController {
   constructor(private readonly systemService: SystemService) {}
 
+  // API to get categories
+  @Get('categories')
+  async getCategories() {
+    return this.systemService.getCategories();
+  }
+
   // API to get statuses
   @Get('statuses')
   async getStatuses() {
