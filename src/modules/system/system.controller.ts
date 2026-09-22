@@ -6,37 +6,105 @@ import {
   UploadedFile,
   UseInterceptors,
   Get,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as path from 'path';
 import { SystemService } from './system.service';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { StatusResponseDto } from './dto/status-response.dto';
+import { CategoryResponseDto } from './dto/category-response.dto';
+import { CensorshipResponseDto } from './dto/censorship-response.dto';
+import { LanguageResponseDto } from './dto/language-response.dto';
 
+@ApiTags('System')
 @Controller('system')
 export class SystemController {
   constructor(private readonly systemService: SystemService) {}
 
   // API to get categories
   @Get('categories')
-  async getCategories() {
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mendapatkan daftar kategori komik aktif',
+    description:
+      'Mengambil seluruh kategori komik yang belum dihapus (soft-delete), diurutkan berdasarkan nama secara alfabetis.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Daftar kategori berhasil diambil',
+    type: [CategoryResponseDto],
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'Terjadi kesalahan internal pada server',
+  })
+  async getCategories(): Promise<CategoryResponseDto[]> {
     return this.systemService.getCategories();
   }
 
-  // API to get statuses
+  // API to get status
   @Get('statuses')
-  async getStatuses() {
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mendapatkan daftar status sistem / komik',
+    description:
+      'Mengambil seluruh list status yang tersedia di sistem untuk keperluan dropdown/filter.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Berhasil mengambil daftar status',
+    type: [StatusResponseDto],
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'Terjadi kesalahan pada server saat mengambil data',
+  })
+  async getStatuses(): Promise<StatusResponseDto[]> {
     return this.systemService.getStatuses();
   }
 
   // API to get censorships
   @Get('censorships')
-  async getCensorships() {
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mendapatkan daftar status sensor (censorships)',
+    description:
+      'Mengambil seluruh list status sensor untuk chapter/komik (Censored, Uncensored, dsb).',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Daftar censorship berhasil diambil',
+    type: [CensorshipResponseDto],
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'Terjadi kesalahan internal pada server',
+  })
+  async getCensorships(): Promise<CensorshipResponseDto[]> {
     return this.systemService.getCensorships();
   }
 
   // API to get languages
   @Get('languages')
-  async getLanguages() {
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mendapatkan daftar bahasa',
+    description:
+      'Mengambil seluruh daftar bahasa yang didukung untuk chapter komik.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Daftar bahasa berhasil diambil',
+    type: [LanguageResponseDto],
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'Terjadi kesalahan internal pada server',
+  })
+  async getLanguages(): Promise<LanguageResponseDto[]> {
     return this.systemService.getLanguages();
   }
 

@@ -1,68 +1,93 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  InternalServerErrorException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StatusResponseDto } from './dto/status-response.dto';
 import * as fs from 'fs/promises';
+import { CategoryResponseDto } from './dto/category-response.dto';
+import { CensorshipResponseDto } from './dto/censorship-response.dto';
+import { LanguageResponseDto } from './dto/language-response.dto';
 
 @Injectable()
 export class SystemService {
+  private readonly logger = new Logger(SystemService.name);
   constructor(private readonly prisma: PrismaService) {}
 
-  // Get all active categories
-  async getCategories() {
-    return this.prisma.categories.findMany({
-      where: {
-        deleted_at: null,
-      },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        created_at: true,
-        updated_at: true,
-        deleted_at: true,
-      },
-      orderBy: {
-        name: 'asc',
-      },
-    });
+  async getCategories(): Promise<CategoryResponseDto[]> {
+    try {
+      return await this.prisma.categories.findMany({
+        where: {
+          deleted_at: null,
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          created_at: true,
+          updated_at: true,
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      });
+    } catch (error) {
+      this.logger.error('Failed to retrieve categories', error);
+      throw new InternalServerErrorException('Gagal mengambil data kategori');
+    }
   }
 
-  // Gets statuses from the database
-  async getStatuses() {
-    const result = await this.prisma.$queryRawUnsafe<
-      Array<{
-        fn_get_statuses: any;
-      }>
-    >(`
-      SELECT public.fn_get_statuses()
-    `);
-
-    return result?.[0]?.fn_get_statuses ?? [];
+  async getStatuses(): Promise<StatusResponseDto[]> {
+    try {
+      return await this.prisma.statuses.findMany({
+        orderBy: {
+          id: 'asc',
+        },
+      });
+    } catch (error) {
+      this.logger.error('Failed to retrieve statuses', error);
+      throw new InternalServerErrorException('Gagal mengambil data status');
+    }
   }
 
-  // Gets censorships from the database
-  async getCensorships() {
-    const result = await this.prisma.$queryRawUnsafe<
-      Array<{
-        fn_get_censorships: any;
-      }>
-    >(`
-      SELECT public.fn_get_censorships()
-    `);
-
-    return result?.[0]?.fn_get_censorships ?? [];
+  async getCensorships(): Promise<CensorshipResponseDto[]> {
+    try {
+      return await this.prisma.censorships.findMany({
+        select: {
+          id: true,
+          name: true,
+          created_at: true,
+          updated_at: true,
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      });
+    } catch (error) {
+      this.logger.error('Failed to retrieve censorships', error);
+      throw new InternalServerErrorException('Gagal mengambil data sensor');
+    }
   }
 
-  // Gets languages from the database
-  async getLanguages() {
-    const result = await this.prisma.$queryRawUnsafe<
-      Array<{
-        fn_get_languages: any;
-      }>
-    >(`
-      SELECT public.fn_get_languages()
-    `);
-
-    return result?.[0]?.fn_get_languages ?? [];
+  async getLanguages(): Promise<LanguageResponseDto[]> {
+    try {
+      return await this.prisma.languages.findMany({
+        select: {
+          code: true,
+          name: true,
+          created_at: true,
+          updated_at: true,
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      });
+    } catch (error) {
+      this.logger.error('Failed to retrieve languages', error);
+      throw new InternalServerErrorException('Gagal mengambil data bahasa');
+    }
   }
 
   // Imports comics from a JSON file
