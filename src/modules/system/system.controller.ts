@@ -108,6 +108,34 @@ export class SystemController {
     return this.systemService.getLanguages();
   }
 
+  // Endpoint to reset all data in the database
+  @Post('reset-all-data')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reset database and physical assets',
+    description:
+      'Menghapus seluruh baris data database komik & master tags serta membersihkan semua file/folder di STATIC_DIR (dinonaktifkan di production).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Database and storage reset successfully',
+    schema: {
+      example: {
+        success: true,
+        message:
+          'All database data and physical assets have been successfully reset',
+        storageCleaned: true,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Operation rejected in production or path error',
+  })
+  async resetAllData() {
+    return this.systemService.resetAllData();
+  }
+
   // Endpoint to import comics from a JSON file
   @Post('import-comics-file')
   @UseInterceptors(
@@ -151,11 +179,5 @@ export class SystemController {
   @Post('import-comics')
   async importComics(@Body() body: unknown) {
     return this.systemService.importComics(body);
-  }
-
-  // Endpoint to reset all data in the database
-  @Post('reset-all-data')
-  async resetAllData() {
-    return this.systemService.resetAllData();
   }
 }

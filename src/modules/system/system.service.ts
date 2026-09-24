@@ -4,17 +4,24 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StatusResponseDto } from './dto/status-response.dto';
-import * as fs from 'fs/promises';
 import { CategoryResponseDto } from './dto/category-response.dto';
 import { CensorshipResponseDto } from './dto/censorship-response.dto';
 import { LanguageResponseDto } from './dto/language-response.dto';
+import { clearDirectoryContents } from 'src/helper/comics';
 
 @Injectable()
 export class SystemService {
   private readonly logger = new Logger(SystemService.name);
-  constructor(private readonly prisma: PrismaService) {}
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {}
 
   async getCategories(): Promise<CategoryResponseDto[]> {
     try {
@@ -129,19 +136,63 @@ export class SystemService {
     };
   }
 
-  // Resets all data in the database
   async resetAllData() {
-    if (process.env.NODE_ENV === 'production') {
+    const nodeEnv =
+      this.configService.get<string>('NODE_ENV') || process.env.NODE_ENV;
+    if (nodeEnv === 'production') {
       throw new BadRequestException('Reset data is disabled in production');
     }
 
+    this.logger.log('Executing database truncate...');
     await this.prisma.$executeRawUnsafe(`
-      SELECT public.fn_reset_all_data();
+      TRUNCATE TABLE 
+        public.bookmarks,
+        public.read_histories,
+        public.search_indexes,
+        public.pages,
+        public.chapters,
+        public.comic_artists,
+        public.comic_authors,
+        public.comic_characters,
+        public.comic_groups,
+        public.comic_parodies,
+        public.comic_tags,
+        public.comics,
+        public.import_logs,
+        public.tb_artists,
+        public.tb_authors,
+        public.tb_characters,
+        public.tb_groups,
+        public.tb_parodies,
+        public.tb_tags
+      RESTART IDENTITY CASCADE;
     `);
+
+    const staticDirRelative = this.configService.get<string>('STATIC_DIR');
+    let filesDeleted = false;
+
+    if (staticDirRelative) {
+      const targetDirectory = path.resolve(process.cwd(), staticDirRelative);
+      this.logger.log(`Cleaning target directory: ${targetDirectory}`);
+
+      try {
+        await clearDirectoryContents(targetDirectory);
+        filesDeleted = true;
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to clean directory ${targetDirectory}: ${error.message}`,
+        );
+        throw new BadRequestException(
+          `Database truncated, but failed to clean storage directory: ${error.message}`,
+        );
+      }
+    }
 
     return {
       success: true,
-      message: 'All data has been reset',
+      message:
+        'All database data and physical assets have been successfully reset',
+      storageCleaned: filesDeleted,
     };
   }
 }

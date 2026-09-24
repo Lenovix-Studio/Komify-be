@@ -141,3 +141,20 @@ export async function saveChapterPage(
     filename,
   };
 }
+
+export async function clearDirectoryContents(
+  directoryPath: string,
+): Promise<void> {
+  try {
+    await fs.access(directoryPath);
+  } catch {
+    await fs.mkdir(directoryPath, { recursive: true });
+    return;
+  }
+
+  const items = await fs.readdir(directoryPath);
+  for (const item of items) {
+    const itemPath = path.join(directoryPath, item);
+    await fs.rm(itemPath, { recursive: true, force: true });
+  }
+}
