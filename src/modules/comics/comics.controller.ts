@@ -12,53 +12,76 @@ import {
   Delete,
   UploadedFile,
   BadRequestException,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { ComicsService } from './comics.service';
 import { CreateChapterDto } from '../chapters/dto/create-chapter.dto';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiConsumes,
+  ApiBody,
+} from '@nestjs/swagger';
+import { FindComicsQueryDto } from './dto/find-comics-query.dto';
+import { ComicPaginationResponseDto } from './dto/comic-list-response.dto';
+import { RandomComicResponseDto } from './dto/random-comic-response.dto';
+import { PublishComicUploadDto } from './dto/publish-comic.dto';
+import { PublishComicResponseDto } from './dto/publish-comic-response.dto';
 
+@ApiTags('Comics')
 @Controller('comics')
 export class ComicsController {
   constructor(private readonly comicsService: ComicsService) {}
 
   // API to get a random comic
   @Get('random')
-  async getRandomComic() {
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mendapatkan satu komik secara acak',
+    description:
+      'Mengambil satu data komik aktif (tidak terhapus) secara acak untuk fitur rekomendasi/eksplorasi.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Berhasil mendapatkan komik acak',
+    type: RandomComicResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Tidak ada data komik yang ditemukan',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'Terjadi kegagalan server saat memproses data',
+  })
+  async getRandomComic(): Promise<RandomComicResponseDto> {
     return this.comicsService.getRandomComic();
   }
 
   // API to get a list of comics with optional filters and pagination
   @Get()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mendapatkan daftar komik (Filter & Pagination)',
+    description:
+      'Mengambil daftar komik dengan filter teks pencarian, kategori, status, bahasa chapter, dan tag/karakter/artist/author/parodi/group.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Daftar komik beserta pagination berhasil diambil',
+    type: ComicPaginationResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'Terjadi kegagalan server saat memproses data',
+  })
   async findAll(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('q') q?: string,
-    @Query('category') category?: string,
-    @Query('status') status?: string,
-    @Query('language') language?: string,
-    @Query('tags') tags?: string,
-    @Query('parodies') parodies?: string,
-    @Query('characters') characters?: string,
-    @Query('artists') artists?: string,
-    @Query('groups') groups?: string,
-    @Query('authors') authors?: string,
-    @Query('sort') sort?: string,
-  ) {
-    return this.comicsService.findAll({
-      page: Number(page || 1),
-      limit: Number(limit || 20),
-      q,
-      category,
-      status,
-      language,
-      tags: tags ? tags.split(',').map((x) => x.trim()) : [],
-      parodies: parodies ? parodies.split(',').map((x) => x.trim()) : [],
-      characters: characters ? characters.split(',').map((x) => x.trim()) : [],
-      artists: artists ? artists.split(',').map((x) => x.trim()) : [],
-      groups: groups ? groups.split(',').map((x) => x.trim()) : [],
-      authors: authors ? authors.split(',').map((x) => x.trim()) : [],
-      sort,
-    });
+    @Query() query: FindComicsQueryDto,
+  ): Promise<ComicPaginationResponseDto> {
+    return this.comicsService.findAll(query);
   }
 
   // API to delete a comic by ID
@@ -108,11 +131,28 @@ export class ComicsController {
 
   // API to publish a comic
   @Post('publish')
+  @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(AnyFilesInterceptor())
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Mempublikasikan komik baru beserta chapters dan pages',
+    description:
+      'Endpoint untuk upload komik, memproses cover dan gambar halaman chapter ke WebP, mengekstrak metadata relasi (tags, authors, dsb.), dan menyimpannya secara transaksional.',
+  })
+  @ApiBody({ type: PublishComicUploadDto })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Komik berhasil dipublikasikan',
+    type: PublishComicResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Data payload atau file tidak valid',
+  })
   async publishComic(
     @UploadedFiles() files: Array<Express.Multer.File>,
-    @Body() body: any,
-  ) {
+    @Body() body: PublishComicUploadDto,
+  ): Promise<PublishComicResponseDto> {
     return this.comicsService.publishComic(files, body);
   }
 

@@ -35,43 +35,12 @@ model statuses {
   comics     comics[]
 }
 
-model bookmarks {
-  comic_id   String   @id @db.Uuid
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  comics     comics   @relation(fields: [comic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bookmarks_comic")
-}
-
 model censorships {
   id         String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   name       String     @unique @db.VarChar(50)
   created_at DateTime   @default(now()) @db.Timestamptz(6)
   updated_at DateTime   @default(now()) @db.Timestamptz(6)
   chapters   chapters[]
-}
-
-model chapters {
-  id             String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  comic_id       String           @db.Uuid
-  chapter_number String           @db.VarChar(50)
-  title          String?
-  language_code  String           @db.VarChar(5)
-  censorship_id  String           @db.Uuid
-  published_at   DateTime?        @db.Timestamptz(6)
-  total_pages    Int              @default(0)
-  checksum       String?          @db.VarChar(255)
-  created_at     DateTime         @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime         @default(now()) @db.Timestamptz(6)
-  deleted_at     DateTime?        @db.Timestamptz(6)
-  censorships    censorships      @relation(fields: [censorship_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_chapters_censorship")
-  comics         comics           @relation(fields: [comic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_chapters_comic")
-  languages      languages        @relation(fields: [language_code], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "fk_chapters_language")
-  pages          pages[]
-  read_histories read_histories[]
-
-  @@unique([comic_id, chapter_number, language_code], map: "uq_chapters_unique")
-  @@index([censorship_id], map: "idx_chapters_censorship_id")
-  @@index([comic_id], map: "idx_chapters_comic_id")
-  @@index([language_code], map: "idx_chapters_language_code")
 }
 
 model comic_artists {
@@ -132,113 +101,6 @@ model comic_tags {
   tb_tags    tb_tags  @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_comic_tags_tag")
 
   @@id([comic_id, tag_id])
-}
-
-model comics {
-  id                String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  legacy_id         BigInt             @unique(map: "comics_slug_key")
-  title             String
-  alternative_title String?
-  description       String?
-  category_id       String             @db.Uuid
-  status_id         String             @db.Uuid
-  cover_path        String?
-  source_name       String?            @db.VarChar(100)
-  source_url        String?
-  published_at      DateTime?          @db.Timestamptz(6)
-  rating_score      Int                @default(0)
-  rating_count      Int                @default(0)
-  view_count        BigInt             @default(0)
-  total_chapters    Int                @default(0)
-  checksum          String?            @db.VarChar(255)
-  import_log_id     String?            @db.Uuid
-  created_at        DateTime           @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime           @default(now()) @db.Timestamptz(6)
-  deleted_at        DateTime?          @db.Timestamptz(6)
-  seo_slug          String?            @unique @db.VarChar(255)
-  storage_key       String?            @db.VarChar(255)
-  bookmarks         bookmarks?
-  chapters          chapters[]
-  comic_artists     comic_artists[]
-  comic_authors     comic_authors[]
-  comic_characters  comic_characters[]
-  comic_groups      comic_groups[]
-  comic_parodies    comic_parodies[]
-  comic_tags        comic_tags[]
-  categories        categories         @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comics_category")
-  import_logs       import_logs?       @relation(fields: [import_log_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comics_import_log")
-  statuses          statuses           @relation(fields: [status_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comics_status")
-  read_histories    read_histories[]
-  search_indexes    search_indexes?
-
-  @@index([category_id], map: "idx_comics_category_id")
-  @@index([published_at], map: "idx_comics_published_at")
-  @@index([legacy_id], map: "idx_comics_slug")
-  @@index([source_name], map: "idx_comics_source_name")
-  @@index([status_id], map: "idx_comics_status_id")
-  @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_comics_title", type: Gin)
-}
-
-model import_logs {
-  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  filename     String
-  source_name  String?  @db.VarChar(100)
-  status       String   @db.VarChar(50)
-  total_data   Int      @default(0)
-  success_data Int      @default(0)
-  failed_data  Int      @default(0)
-  error_log    String?
-  imported_at  DateTime @db.Timestamptz(6)
-  created_at   DateTime @default(now()) @db.Timestamptz(6)
-  comics       comics[]
-
-  @@index([source_name], map: "idx_import_logs_source_name")
-  @@index([status], map: "idx_import_logs_status")
-}
-
-model pages {
-  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  chapter_id  String   @db.Uuid
-  page_number Int
-  filename    String
-  filepath    String
-  width       Int?
-  height      Int?
-  filesize    BigInt?
-  checksum    String?  @db.VarChar(255)
-  created_at  DateTime @default(now()) @db.Timestamptz(6)
-  updated_at  DateTime @default(now()) @db.Timestamptz(6)
-  chapters    chapters @relation(fields: [chapter_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pages_chapter")
-
-  @@unique([chapter_id, page_number], map: "uq_pages_unique")
-  @@index([chapter_id], map: "idx_pages_chapter_id")
-  @@index([page_number], map: "idx_pages_page_number")
-}
-
-model read_histories {
-  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  user_id    String   @db.Uuid
-  comic_id   String   @db.Uuid
-  chapter_id String   @db.Uuid
-  last_page  Int      @default(1)
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  updated_at DateTime @default(now()) @db.Timestamptz(6)
-  chapters   chapters @relation(fields: [chapter_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_read_histories_chapter")
-  comics     comics   @relation(fields: [comic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_read_histories_comic")
-
-  @@unique([user_id, chapter_id], map: "uq_read_histories_user_chapter")
-  @@index([chapter_id], map: "idx_read_histories_chapter_id")
-  @@index([comic_id], map: "idx_read_histories_comic_id")
-  @@index([user_id], map: "idx_read_histories_user_id")
-}
-
-model search_indexes {
-  comic_id      String                   @id @db.Uuid
-  search_vector Unsupported("tsvector")?
-  updated_at    DateTime                 @default(now()) @db.Timestamptz(6)
-  comics        comics                   @relation(fields: [comic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_search_indexes_comic")
-
-  @@index([search_vector], map: "idx_search_indexes_vector", type: Gin)
 }
 
 model tb_artists {
@@ -318,4 +180,142 @@ model tb_tags {
 
   @@index([name], map: "idx_tags_name")
   @@index([slug], map: "idx_tags_slug")
+}
+
+model comics {
+  id                String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  legacy_id         BigInt             @unique(map: "comics_slug_key")
+  title             String
+  alternative_title String?
+  description       String?
+  category_id       String             @db.Uuid
+  status_id         String             @db.Uuid
+  cover_path        String?
+  source_name       String?            @db.VarChar(100)
+  source_url        String?
+  published_at      DateTime?          @db.Timestamptz(6)
+  rating_score      Int                @default(0)
+  rating_count      Int                @default(0)
+  view_count        BigInt             @default(0)
+  total_chapters    Int                @default(0)
+  checksum          String?            @db.VarChar(255)
+  import_log_id     String?            @db.Uuid
+  created_at        DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime           @default(now()) @db.Timestamptz(6)
+  deleted_at        DateTime?          @db.Timestamptz(6)
+  seo_slug          String?            @unique @db.VarChar(255)
+  storage_key       String?            @db.VarChar(255)
+  bookmarks         bookmarks?
+  chapters          chapters[]
+  comic_artists     comic_artists[]
+  comic_authors     comic_authors[]
+  comic_characters  comic_characters[]
+  comic_groups      comic_groups[]
+  comic_parodies    comic_parodies[]
+  comic_tags        comic_tags[]
+  categories        categories         @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comics_category")
+  import_logs       import_logs?       @relation(fields: [import_log_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comics_import_log")
+  statuses          statuses           @relation(fields: [status_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comics_status")
+  read_histories    read_histories[]
+  search_indexes    search_indexes?
+
+  @@index([category_id], map: "idx_comics_category_id")
+  @@index([published_at], map: "idx_comics_published_at")
+  @@index([legacy_id], map: "idx_comics_slug")
+  @@index([source_name], map: "idx_comics_source_name")
+  @@index([status_id], map: "idx_comics_status_id")
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_comics_title", type: Gin)
+}
+
+model chapters {
+  id             String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  comic_id       String           @db.Uuid
+  chapter_number String           @db.VarChar(50)
+  title          String?
+  language_code  String           @db.VarChar(5)
+  censorship_id  String           @db.Uuid
+  published_at   DateTime?        @db.Timestamptz(6)
+  total_pages    Int              @default(0)
+  checksum       String?          @db.VarChar(255)
+  created_at     DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime         @default(now()) @db.Timestamptz(6)
+  deleted_at     DateTime?        @db.Timestamptz(6)
+  censorships    censorships      @relation(fields: [censorship_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_chapters_censorship")
+  comics         comics           @relation(fields: [comic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_chapters_comic")
+  languages      languages        @relation(fields: [language_code], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "fk_chapters_language")
+  pages          pages[]
+  read_histories read_histories[]
+
+  @@unique([comic_id, chapter_number, language_code], map: "uq_chapters_unique")
+  @@index([censorship_id], map: "idx_chapters_censorship_id")
+  @@index([comic_id], map: "idx_chapters_comic_id")
+  @@index([language_code], map: "idx_chapters_language_code")
+}
+
+model pages {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  chapter_id  String   @db.Uuid
+  page_number Int
+  filename    String
+  filepath    String
+  width       Int?
+  height      Int?
+  filesize    BigInt?
+  checksum    String?  @db.VarChar(255)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+  chapters    chapters @relation(fields: [chapter_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pages_chapter")
+
+  @@unique([chapter_id, page_number], map: "uq_pages_unique")
+  @@index([chapter_id], map: "idx_pages_chapter_id")
+  @@index([page_number], map: "idx_pages_page_number")
+}
+
+model bookmarks {
+  comic_id   String   @id @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  comics     comics   @relation(fields: [comic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bookmarks_comic")
+}
+
+model read_histories {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  comic_id   String   @db.Uuid
+  chapter_id String   @db.Uuid
+  last_page  Int      @default(1)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  chapters   chapters @relation(fields: [chapter_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_read_histories_chapter")
+  comics     comics   @relation(fields: [comic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_read_histories_comic")
+
+  @@unique([user_id, chapter_id], map: "uq_read_histories_user_chapter")
+  @@index([chapter_id], map: "idx_read_histories_chapter_id")
+  @@index([comic_id], map: "idx_read_histories_comic_id")
+  @@index([user_id], map: "idx_read_histories_user_id")
+}
+
+model search_indexes {
+  comic_id      String                   @id @db.Uuid
+  search_vector Unsupported("tsvector")?
+  updated_at    DateTime                 @default(now()) @db.Timestamptz(6)
+  comics        comics                   @relation(fields: [comic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_search_indexes_comic")
+
+  @@index([search_vector], map: "idx_search_indexes_vector", type: Gin)
+}
+
+model import_logs {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  filename     String
+  source_name  String?  @db.VarChar(100)
+  status       String   @db.VarChar(50)
+  total_data   Int      @default(0)
+  success_data Int      @default(0)
+  failed_data  Int      @default(0)
+  error_log    String?
+  imported_at  DateTime @db.Timestamptz(6)
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  comics       comics[]
+
+  @@index([source_name], map: "idx_import_logs_source_name")
+  @@index([status], map: "idx_import_logs_status")
 }

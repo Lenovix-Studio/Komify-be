@@ -7,8 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
-    "dev:bun": "cross-env NODE_ENV=dev nest start --watch",
-    "dev": "dotenv -e .env.dev -- bun --watch src/main.ts",
+    "dev:bun": "dotenv -e .env.dev -- bun --watch src/main.ts",
     "start": "cross-env NODE_ENV=production node dist/main",
     "start:bun": "dotenv -e .env.production -- cross-env NODE_ENV=production bun dist/main.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -19,8 +18,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "prisma:dev:push": "dotenv -e .env.dev -- bun x prisma db push && dotenv -e .env.dev -- bun x prisma db seed",
     "prisma:gen:prod": "bunx dotenv -e .env.production -- npx prisma generate",
-    "prisma:dev:push": "dotenv -e .env.dev -- npx prisma db push",
     "prisma:dev:studio": "dotenv -e .env.dev -- npx prisma studio",
     "prisma:prod:push": "dotenv -e .env.production -- npx prisma db push",
     "prisma:prod:studio": "dotenv -e .env.production -- npx prisma studio"
