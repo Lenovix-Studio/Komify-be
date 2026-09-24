@@ -8,6 +8,12 @@ const prisma = new PrismaClient({
   },
 });
 
+const categoriesData = [
+  { name: 'Manga', slug: 'manga' },
+  { name: 'Doujinshi', slug: 'doujinshi' },
+  { name: 'Manhwa', slug: 'manhwa' },
+];
+
 async function main() {
   console.log('🌱 Starting database seeding...');
 
@@ -23,15 +29,19 @@ async function main() {
   console.log(`✅ Seeded language: ${language.name} (${language.code})`);
 
   // 2. Seed Table: categories
-  const category = await prisma.categories.upsert({
-    where: { name: 'Manga' },
-    update: {},
-    create: {
-      name: 'Manga',
-      slug: 'manga',
-    },
+  const seededCategories = await Promise.all(
+    categoriesData.map((cat) =>
+      prisma.categories.upsert({
+        where: { name: cat.name },
+        update: {},
+        create: cat,
+      }),
+    ),
+  );
+
+  seededCategories.forEach((cat) => {
+    console.log(`✅ Seeded category: ${cat.name}`);
   });
-  console.log(`✅ Seeded category: ${category.name}`);
 
   // 3. Seed Table: statuses
   const status = await prisma.statuses.upsert({
