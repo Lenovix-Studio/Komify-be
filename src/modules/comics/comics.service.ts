@@ -31,6 +31,8 @@ import {
   writeChapterPagesToDisk,
 } from '@/helper/comics';
 import { NormalizedPage } from '@/types/comics';
+import { ComicMetadataResponseDto } from './dto/comic-metadata.dto';
+import { ComicChaptersResponseDto } from './dto/comic-chapters.dto';
 
 @Injectable()
 export class ComicsService {
@@ -1138,18 +1140,63 @@ export class ComicsService {
     return result?.[0]?.data ?? null;
   }
 
-  // API to get chapters by comic ID
-  async getChaptersByComic(comicId: string) {
-    const result = await this.prisma.$queryRawUnsafe(
-      `
-      SELECT fn_get_chapters_by_comic(
-        $1::uuid
-      ) AS data
-      `,
-      comicId,
-    );
+  async getChaptersByComic(comicId: string): Promise<ComicChaptersResponseDto> {
+    const chapters = await this.prisma.chapters.findMany({
+      where: {
+        comic_id: comicId,
+        deleted_at: null,
+      },
+      include: {
+        languages: {
+          select: { code: true, name: true },
+        },
+        censorships: {
+          select: { id: true, name: true },
+        },
+        pages: {
+          select: {
+            id: true,
+            filename: true,
+            filepath: true,
+            page_number: true,
+          },
+          orderBy: {
+            page_number: 'asc',
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'asc',
+      },
+    });
 
-    return result?.[0]?.data ?? null;
+    return {
+      comic_id: comicId,
+      total_chapters: chapters.length,
+      data: chapters.map((ch) => ({
+        id: ch.id,
+        title: ch.title ?? `Chapter ${ch.chapter_number}`,
+        chapter_number: String(ch.chapter_number),
+        total_pages: ch.total_pages,
+        published_at: ch.published_at
+          ? ch.published_at.toISOString()
+          : ch.created_at.toISOString(),
+        language: {
+          code: ch.languages.code,
+          name: ch.languages.name,
+        },
+        censorship: {
+          id: ch.censorships.id,
+          name: ch.censorships.name,
+        },
+        pages: ch.pages.map((p) => ({
+          id: p.id,
+          filename: p.filename,
+          filepath: p.filepath,
+          page_number: p.page_number,
+        })),
+      })),
+    };
   }
 
   // API to get homepage comics with pagination
@@ -1168,25 +1215,119 @@ export class ComicsService {
     return result?.[0]?.data ?? null;
   }
 
-  // API to get comic metadata by comic ID
-  async getComicMetadata(comicId: string) {
-    const result = await this.prisma.$queryRawUnsafe<
-      Array<{
-        fn_get_comic_metadata: any;
-      }>
-    >(
-      `
-      SELECT public.fn_get_comic_metadata(
-        p_comic_id := $1::uuid
-      )
-      `,
-      comicId,
-    );
+  async getComicMetadata(
+    comicId: string,
+  ): Promise<ComicMetadataResponseDto | null> {
+    const comic = await this.prisma.comics.findFirst({
+      where: {
+        id: comicId,
+        deleted_at: null,
+      },
+      include: {
+        statuses: {
+          select: { id: true, name: true },
+        },
+        categories: {
+          select: { id: true, name: true, slug: true },
+        },
+        comic_tags: {
+          include: {
+            tb_tags: {
+              select: { id: true, name: true, slug: true },
+            },
+          },
+        },
+        comic_parodies: {
+          include: {
+            tb_parodies: {
+              select: { id: true, name: true, slug: true },
+            },
+          },
+        },
+        comic_characters: {
+          include: {
+            tb_characters: {
+              select: { id: true, name: true, slug: true },
+            },
+          },
+        },
+        comic_artists: {
+          include: {
+            tb_artists: {
+              select: { id: true, name: true, slug: true },
+            },
+          },
+        },
+        comic_authors: {
+          include: {
+            tb_authors: {
+              select: { id: true, name: true, slug: true },
+            },
+          },
+        },
+        comic_groups: {
+          include: {
+            tb_groups: {
+              select: { id: true, name: true, slug: true },
+            },
+          },
+        },
+      },
+    });
 
-    if (!result.length) {
+    if (!comic) {
       return null;
     }
 
-    return result[0].fn_get_comic_metadata;
+    return {
+      id: comic.id,
+      title: comic.title,
+      alternative_title: comic.alternative_title,
+      description: comic.description,
+      legacy_id: comic.legacy_id,
+      cover_path: comic.cover_path,
+      total_chapters: comic.total_chapters,
+      status: {
+        id: comic.statuses.id,
+        name: comic.statuses.name,
+      },
+      category: {
+        id: comic.categories.id,
+        name: comic.categories.name,
+        slug: comic.categories.slug,
+      },
+      tags: comic.comic_tags.map((item) => ({
+        id: item.tb_tags.id,
+        name: item.tb_tags.name,
+        slug: item.tb_tags.slug,
+      })),
+      parodies: comic.comic_parodies.map((item) => ({
+        id: item.tb_parodies.id,
+        name: item.tb_parodies.name,
+        slug: item.tb_parodies.slug,
+      })),
+      characters: comic.comic_characters.map((item) => ({
+        id: item.tb_characters.id,
+        name: item.tb_characters.name,
+        slug: item.tb_characters.slug,
+      })),
+      artists: comic.comic_artists.map((item) => ({
+        id: item.tb_artists.id,
+        name: item.tb_artists.name,
+        slug: item.tb_artists.slug,
+      })),
+      authors: comic.comic_authors.map((item) => ({
+        id: item.tb_authors.id,
+        name: item.tb_authors.name,
+        slug: item.tb_authors.slug,
+      })),
+      groups: comic.comic_groups.map((item) => ({
+        id: item.tb_groups.id,
+        name: item.tb_groups.name,
+        slug: item.tb_groups.slug,
+      })),
+      created_at: comic.created_at.toISOString(),
+      updated_at: comic.updated_at.toISOString(),
+    };
   }
 }

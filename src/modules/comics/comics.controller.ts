@@ -14,6 +14,7 @@ import {
   BadRequestException,
   HttpCode,
   HttpStatus,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { ComicsService } from './comics.service';
@@ -24,12 +25,15 @@ import {
   ApiResponse,
   ApiConsumes,
   ApiBody,
+  ApiParam,
 } from '@nestjs/swagger';
 import { FindComicsQueryDto } from './dto/find-comics-query.dto';
 import { ComicPaginationResponseDto } from './dto/comic-list-response.dto';
 import { RandomComicResponseDto } from './dto/random-comic-response.dto';
 import { PublishComicUploadDto } from './dto/publish-comic.dto';
 import { PublishComicResponseDto } from './dto/publish-comic-response.dto';
+import { ComicMetadataResponseDto } from './dto/comic-metadata.dto';
+import { ComicChaptersResponseDto } from './dto/comic-chapters.dto';
 
 @ApiTags('Comics')
 @Controller('comics')
@@ -167,7 +171,25 @@ export class ComicsController {
 
   // API to get chapter details by comic ID
   @Get(':comicId/chapters')
-  async getChaptersByComic(@Param('comicId') comicId: string) {
+  @ApiOperation({
+    summary: 'Get chapters by comic ID',
+    description:
+      'Mengambil seluruh daftar chapter beserta pages, bahasa, dan censorship berdasarkan ID comic.',
+  })
+  @ApiParam({
+    name: 'comicId',
+    type: 'string',
+    format: 'uuid',
+    description: 'UUID comic',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Daftar chapter berhasil diambil',
+    type: ComicChaptersResponseDto,
+  })
+  async getChaptersByComic(
+    @Param('comicId', new ParseUUIDPipe()) comicId: string,
+  ): Promise<ComicChaptersResponseDto> {
     return this.comicsService.getChaptersByComic(comicId);
   }
 
@@ -185,7 +207,29 @@ export class ComicsController {
 
   // API to get comic metadata by comic ID
   @Get(':id/metadata')
-  async getMetadata(@Param('id') id: string) {
+  @ApiOperation({
+    summary: 'Get comic metadata by comic ID',
+    description:
+      'Mengambil informasi lengkap metadata komik (kategori, tag, author, artist, status, dsb)',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'UUID comic',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Metadata berhasil diambil',
+    type: ComicMetadataResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Comic metadata not found',
+  })
+  async getMetadata(
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<ComicMetadataResponseDto> {
     const data = await this.comicsService.getComicMetadata(id);
 
     if (!data) {
