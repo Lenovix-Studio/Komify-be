@@ -16,9 +16,14 @@ async function bootstrap() {
     }),
   );
 
+  const allowedOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
+    : ['http://localhost:3001'];
+
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: allowedOrigins,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   });
 
   const staticDir =
@@ -29,6 +34,11 @@ async function bootstrap() {
 
   app.useStaticAssets(staticDir, {
     prefix: staticPrefix,
+  });
+
+  const defaultDir = join(staticDir, '..', 'default');
+  app.useStaticAssets(defaultDir, {
+    prefix: '/default',
   });
 
   const config = new DocumentBuilder()
@@ -44,7 +54,6 @@ async function bootstrap() {
   const port = process.env.PORT ?? 4000;
   await app.listen(port);
 
-  console.log(`🚀 Server running on: http://localhost:${port}`);
   console.log(
     `📂 Serving static files from "${staticDir}" with prefix "${staticPrefix}"`,
   );

@@ -44,6 +44,12 @@ export class ComicMetadataResponseDto {
   @ApiProperty({ example: 1110 })
   total_chapters!: number;
 
+  @ApiProperty({ example: 5 })
+  rating_score!: number;
+
+  @ApiProperty({ example: 120 })
+  rating_count!: number;
+
   @ApiProperty({ type: () => StatusDto })
   status!: StatusDto;
 

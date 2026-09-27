@@ -42,6 +42,43 @@ export class ComicsService {
     private readonly configService: ConfigService,
   ) {}
 
+  async rateComic(comicId: string, rating: number) {
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        comicId,
+      );
+
+    const comic = await this.prisma.comics.findFirst({
+      where: isUuid ? { id: comicId } : { legacy_id: BigInt(comicId) },
+    });
+
+    if (!comic) {
+      throw new NotFoundException('Comic not found');
+    }
+
+    const newCount = comic.rating_count + 1;
+    const newAverage = Math.round(
+      (comic.rating_score * comic.rating_count + rating) / newCount,
+    );
+
+    await this.prisma.comics.update({
+      where: { id: comic.id },
+      data: {
+        rating_score: newAverage,
+        rating_count: newCount,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Rating submitted successfully',
+      data: {
+        rating_score: newAverage,
+        rating_count: newCount,
+      },
+    };
+  }
+
   private splitMetadata(value?: string): string[] {
     if (!value) return [];
     return [
@@ -590,38 +627,59 @@ export class ComicsService {
       throw new BadRequestException('Komik wajib memiliki minimal 1 chapter');
     }
 
-    const [status, category] = await Promise.all([
-      this.prisma.statuses.findFirst({
-        where: { id: document.status },
-      }),
-      this.prisma.categories.findFirst({
-        where: { slug: document.template },
-      }),
-    ]);
-
-    if (!status) {
+    const commonStatus = await this.prisma.common_code_details.findUnique({
+      where: { id: document.status },
+    });
+    if (!commonStatus) {
       throw new BadRequestException(
-        `Status '${document.status}' tidak ditemukan`,
+        `Status Common Code ID '${document.status}' tidak ditemukan`,
       );
     }
+    let status = await this.prisma.statuses.findFirst({
+      where: { name: { equals: commonStatus.name, mode: 'insensitive' } },
+    });
+    if (!status) {
+      status = await this.prisma.statuses.create({
+        data: { name: commonStatus.name },
+      });
+    }
+
+    let category = await this.prisma.categories.findFirst({
+      where: { slug: document.template },
+    });
     if (!category) {
-      throw new BadRequestException(
-        `Kategori '${document.template}' tidak ditemukan`,
-      );
+      category = await this.prisma.categories.create({
+        data: { name: document.template, slug: document.template },
+      });
     }
 
     const censorshipIds = [
       ...new Set(document.chapters.map((ch) => ch.censorship_id)),
     ];
-    const existingCensorships = await this.prisma.censorships.findMany({
+    const commonCensorships = await this.prisma.common_code_details.findMany({
       where: { id: { in: censorshipIds } },
-      select: { id: true },
     });
-    const foundCensorshipIds = new Set(existingCensorships.map((c) => c.id));
+
+    const legacyCensorships = await this.prisma.censorships.findMany();
+    const censorshipIdMap = new Map<string, string>();
     for (const cId of censorshipIds) {
-      if (!foundCensorshipIds.has(cId)) {
-        throw new BadRequestException(`Censorship ID '${cId}' tidak valid`);
+      const cc = commonCensorships.find((c) => c.id === cId);
+      if (!cc)
+        throw new BadRequestException(
+          `Censorship Common Code ID '${cId}' tidak ditemukan`,
+        );
+
+      let lc = legacyCensorships.find(
+        (c) => c.name.toLowerCase() === cc.name.toLowerCase(),
+      );
+      if (!lc) {
+        lc = await this.prisma.censorships.create({
+          data: { name: cc.name },
+        });
+        legacyCensorships.push(lc);
       }
+
+      censorshipIdMap.set(cId, lc.id);
     }
 
     const comicId = randomUUID();
@@ -630,7 +688,7 @@ export class ComicsService {
     const coverFile = files.find((f) => f.fieldname === 'cover');
     const coverPath = coverFile
       ? `${STATIC_PREFIX}/${legacyId}/cover.webp`
-      : `${STATIC_PREFIX}/default/cover.webp`;
+      : `/default/cover.jpg`;
 
     const preparedChapters: Array<{
       id: string;
@@ -655,12 +713,6 @@ export class ComicsService {
         (f) => f.fieldname === `pages_${chapterData.id}`,
       );
 
-      if (chapterFiles.length === 0) {
-        throw new BadRequestException(
-          `Tidak ada file halaman untuk chapter ${chapterNumber} (fieldname: pages_${chapterData.id})`,
-        );
-      }
-
       const normalizedPages = await this.normalizePages(chapterFiles);
       const pagesPayload = prepareChapterPagesPayload(
         legacyId,
@@ -674,8 +726,8 @@ export class ComicsService {
         id: chapterId,
         chapter_number: chapterNumber,
         title: chapterData.title || null,
-        language_code: chapterData.language,
-        censorship_id: chapterData.censorship_id,
+        language_code: chapterData.language.toLowerCase(),
+        censorship_id: censorshipIdMap.get(chapterData.censorship_id)!,
         total_pages: chapterFiles.length,
         pagesPayload,
         normalizedPages,
@@ -766,6 +818,14 @@ export class ComicsService {
           }
 
           for (const ch of preparedChapters) {
+            await tx.languages.upsert({
+              where: { code: ch.language_code },
+              create: {
+                code: ch.language_code,
+                name: ch.language_code.toUpperCase(),
+              },
+              update: {},
+            });
             await tx.chapters.create({
               data: {
                 id: ch.id,
@@ -778,9 +838,11 @@ export class ComicsService {
               },
             });
 
-            await tx.pages.createMany({
-              data: ch.pagesPayload,
-            });
+            if (ch.pagesPayload.length > 0) {
+              await tx.pages.createMany({
+                data: ch.pagesPayload,
+              });
+            }
           }
         },
         { timeout: 60000 },
@@ -796,7 +858,11 @@ export class ComicsService {
     const comicDir = path.join(STATIC_DIR, String(legacyId));
 
     try {
-      await fs.mkdir(comicDir, { recursive: true });
+      try {
+        await fs.mkdir(comicDir, { recursive: true });
+      } catch (err: any) {
+        if (err.code !== 'EEXIST') throw err;
+      }
 
       if (coverFile) {
         const coverSavePath = path.join(comicDir, 'cover.webp');
@@ -868,7 +934,6 @@ export class ComicsService {
       }),
     ]);
 
-    if (!language) throw new BadRequestException('invalid language');
     if (!censorship) throw new BadRequestException('invalid censorship');
     if (existing) throw new ConflictException('chapter already exists');
 
@@ -900,6 +965,14 @@ export class ComicsService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        await tx.languages.upsert({
+          where: { code: dto.language_code },
+          create: {
+            code: dto.language_code,
+            name: dto.language_code.toUpperCase(),
+          },
+          update: {},
+        });
         await tx.chapters.create({
           data: {
             id: chapterId,
@@ -1003,9 +1076,36 @@ export class ComicsService {
       }
 
       const statusId = document.status_id || document.metadata?.status_id;
-      const status = await this.prisma.statuses.findFirst({
-        where: { id: statusId },
-      });
+      let status;
+      const isStatusUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          statusId,
+        );
+
+      if (isStatusUuid) {
+        const commonStatus = await this.prisma.common_code_details.findUnique({
+          where: { id: statusId },
+        });
+        if (commonStatus) {
+          status = await this.prisma.statuses.findFirst({
+            where: { name: { equals: commonStatus.name, mode: 'insensitive' } },
+          });
+          if (!status) {
+            status = await this.prisma.statuses.create({
+              data: { name: commonStatus.name },
+            });
+          }
+        } else {
+          status = await this.prisma.statuses.findFirst({
+            where: { id: statusId },
+          });
+        }
+      } else {
+        status = await this.prisma.statuses.findFirst({
+          where: { id: statusId },
+        });
+      }
+
       if (!status) {
         throw new BadRequestException('invalid status');
       }
@@ -1015,22 +1115,40 @@ export class ComicsService {
         throw new BadRequestException('category is required');
       }
 
-      const isUuid =
+      const isCategoryUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           categoryInput,
         );
 
-      const category = await this.prisma.categories.findFirst({
-        where: isUuid ? { id: categoryInput } : { slug: categoryInput },
-      });
+      let category;
+      if (isCategoryUuid) {
+        category = await this.prisma.categories.findFirst({
+          where: { id: categoryInput },
+        });
+      } else {
+        category = await this.prisma.categories.findFirst({
+          where: { slug: categoryInput },
+        });
+      }
+
+      if (!category && !isCategoryUuid) {
+        category = await this.prisma.categories.create({
+          data: { name: categoryInput, slug: categoryInput },
+        });
+      }
+
       if (!category) {
         throw new BadRequestException('invalid category');
       }
 
       const coverFile = files.find((f) => f.fieldname === 'cover');
-      const coverPath = coverFile
-        ? `${STATIC_PREFIX}/${existingComic.legacy_id}/cover.webp`
-        : existingComic.cover_path;
+
+      let coverPath = existingComic.cover_path;
+      if (coverFile) {
+        coverPath = `${STATIC_PREFIX}/${existingComic.legacy_id}/cover.webp`;
+      } else if (document.cover_removed) {
+        coverPath = `/default/cover.jpg`;
+      }
 
       await this.prisma.$transaction(async (tx) => {
         await tx.comics.update({
@@ -1100,7 +1218,11 @@ export class ComicsService {
 
       if (coverFile) {
         const comicDir = path.join(STATIC_DIR, String(existingComic.legacy_id));
-        await fs.mkdir(comicDir, { recursive: true });
+        try {
+          await fs.mkdir(comicDir, { recursive: true });
+        } catch (err: any) {
+          if (err.code !== 'EEXIST') throw err;
+        }
 
         const coverSavePath = path.join(comicDir, 'cover.webp');
         const isGif =
@@ -1287,6 +1409,8 @@ export class ComicsService {
       legacy_id: comic.legacy_id,
       cover_path: comic.cover_path,
       total_chapters: comic.total_chapters,
+      rating_score: comic.rating_score,
+      rating_count: comic.rating_count,
       status: {
         id: comic.statuses.id,
         name: comic.statuses.name,

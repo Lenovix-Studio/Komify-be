@@ -18,7 +18,6 @@ import {
 } from '@nestjs/common';
 import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { ComicsService } from './comics.service';
-import { CreateChapterDto } from '../chapters/dto/create-chapter.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -27,6 +26,7 @@ import {
   ApiBody,
   ApiParam,
 } from '@nestjs/swagger';
+import { CreateChapterDto } from '../chapters/dto/create-chapter.dto';
 import { FindComicsQueryDto } from './dto/find-comics-query.dto';
 import { ComicPaginationResponseDto } from './dto/comic-list-response.dto';
 import { RandomComicResponseDto } from './dto/random-comic-response.dto';
@@ -39,6 +39,18 @@ import { ComicChaptersResponseDto } from './dto/comic-chapters.dto';
 @Controller('comics')
 export class ComicsController {
   constructor(private readonly comicsService: ComicsService) {}
+
+  // API to rate comic
+  @Post(':comicId/rate')
+  async rateComic(
+    @Param('comicId') comicId: string,
+    @Body('rating') rating: number,
+  ) {
+    if (!rating || rating < 1 || rating > 5) {
+      throw new BadRequestException('Rating must be between 1 and 5');
+    }
+    return this.comicsService.rateComic(comicId, rating);
+  }
 
   // API to get a random comic
   @Get('random')

@@ -232,25 +232,65 @@ export class ChaptersService {
       // =========================
       // VALIDATE CENSORSHIP
       // =========================
+      let censorshipId = document.censorship_id;
+
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          censorshipId,
+        );
+      if (isUuid) {
+        const ccCensorship = await this.prisma.common_code_details.findUnique({
+          where: { id: censorshipId },
+        });
+
+        if (ccCensorship) {
+          let legacyCensorship = await this.prisma.censorships.findFirst({
+            where: { name: { equals: ccCensorship.name, mode: 'insensitive' } },
+          });
+          if (!legacyCensorship) {
+            legacyCensorship = await this.prisma.censorships.create({
+              data: { name: ccCensorship.name },
+            });
+          }
+          censorshipId = legacyCensorship.id;
+        }
+      }
+
       const censorship = await this.prisma.censorships.findUnique({
         where: {
-          id: document.censorship_id,
+          id: censorshipId,
         },
       });
       if (!censorship) {
         throw new BadRequestException('invalid censorship');
       }
 
+      document.censorship_id = censorshipId;
+
       // =========================
       // VALIDATE LANGUAGE
       // =========================
-      const language = await this.prisma.languages.findUnique({
+      let language = await this.prisma.languages.findUnique({
         where: {
           code: document.language_code,
         },
       });
       if (!language) {
-        throw new BadRequestException('invalid language');
+        const ccLanguage = await this.prisma.common_code_details.findFirst({
+          where: {
+            code: { equals: document.language_code, mode: 'insensitive' },
+          },
+        });
+        if (ccLanguage) {
+          language = await this.prisma.languages.create({
+            data: {
+              code: document.language_code.toLowerCase(),
+              name: ccLanguage.name,
+            },
+          });
+        } else {
+          throw new BadRequestException('invalid language');
+        }
       }
 
       return await this.prisma.$transaction(async (tx) => {

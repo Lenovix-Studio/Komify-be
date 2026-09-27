@@ -1,0 +1,174 @@
+{
+  "types": [
+    {
+      "id": "e1bbeb22-33be-44b8-8e40-8c0d0e7a0beb",
+      "code": "CENSORSHIP",
+      "name": "censorship",
+      "description": "censorship",
+      "created_at": "2026-09-27T02:00:41.445Z",
+      "updated_at": "2026-09-27T02:04:46.677Z",
+      "deleted_at": null
+    },
+    {
+      "id": "86f2ea87-0698-4393-803b-8c1fb8dbd858",
+      "code": "LANGUAGE",
+      "name": "language",
+      "description": "language",
+      "created_at": "2026-09-27T02:01:25.068Z",
+      "updated_at": "2026-09-27T02:04:48.542Z",
+      "deleted_at": null
+    },
+    {
+      "id": "3c06c4c1-b811-4f93-a1e5-0fca0c43f61e",
+      "code": "STATUS",
+      "name": "status",
+      "description": "status komik",
+      "created_at": "2026-09-27T01:59:28.027Z",
+      "updated_at": "2026-09-27T02:04:50.573Z",
+      "deleted_at": null
+    },
+    {
+      "id": "5947e191-66a3-4306-a15b-6c3056c8a4b3",
+      "code": "TEMPLATE",
+      "name": "template",
+      "description": "template",
+      "created_at": "2026-09-27T02:02:00.004Z",
+      "updated_at": "2026-09-27T02:19:38.288Z",
+      "deleted_at": null
+    }
+  ],
+  "details": [
+    {
+      "id": "ec3a3d51-b614-4a66-9744-5eb8e2ab1817",
+      "type_id": "5947e191-66a3-4306-a15b-6c3056c8a4b3",
+      "code": "DOUJINSHI",
+      "name": "doujinshi",
+      "sort_order": 1,
+      "is_active": true,
+      "created_at": "2026-09-27T02:02:05.597Z",
+      "updated_at": "2026-09-27T02:09:38.973Z",
+      "deleted_at": null
+    },
+    {
+      "id": "f3db7ba5-5416-43e6-91cf-9d35f9394e43",
+      "type_id": "3c06c4c1-b811-4f93-a1e5-0fca0c43f61e",
+      "code": "NOT_COMPLETED",
+      "name": "not completed",
+      "sort_order": 2,
+      "is_active": true,
+      "created_at": "2026-09-27T02:00:33.301Z",
+      "updated_at": "2026-09-27T02:09:58.901Z",
+      "deleted_at": null
+    },
+    {
+      "id": "d6534a92-1fa9-4df9-9eff-a586d5f17967",
+      "type_id": "3c06c4c1-b811-4f93-a1e5-0fca0c43f61e",
+      "code": "COMPLETED",
+      "name": "completed",
+      "sort_order": 1,
+      "is_active": true,
+      "created_at": "2026-09-27T02:00:20.271Z",
+      "updated_at": "2026-09-27T02:10:01.569Z",
+      "deleted_at": null
+    },
+    {
+      "id": "a05b56f0-cd6e-449e-92b4-26596f3db63b",
+      "type_id": "86f2ea87-0698-4393-803b-8c1fb8dbd858",
+      "code": "EN",
+      "name": "english",
+      "sort_order": 1,
+      "is_active": true,
+      "created_at": "2026-09-27T02:01:31.455Z",
+      "updated_at": "2026-09-27T02:10:14.649Z",
+      "deleted_at": null
+    },
+    {
+      "id": "f5c76c21-818d-44c5-a0e3-17dc73b149d5",
+      "type_id": "86f2ea87-0698-4393-803b-8c1fb8dbd858",
+      "code": "CH",
+      "name": "chinese",
+      "sort_order": 2,
+      "is_active": true,
+      "created_at": "2026-09-27T02:01:43.526Z",
+      "updated_at": "2026-09-27T02:10:23.905Z",
+      "deleted_at": null
+    },
+    {
+      "id": "fe7282ff-82a4-4fa0-8c7e-8c6eb5ec980d",
+      "type_id": "86f2ea87-0698-4393-803b-8c1fb8dbd858",
+      "code": "JP",
+      "name": "japanese",
+      "sort_order": 3,
+      "is_active": true,
+      "created_at": "2026-09-27T02:01:51.779Z",
+      "updated_at": "2026-09-27T02:10:28.163Z",
+      "deleted_at": null
+    },
+    {
+      "id": "8e9c31f1-8f58-4a8d-8ef9-1b154eb1d390",
+      "type_id": "e1bbeb22-33be-44b8-8e40-8c0d0e7a0beb",
+      "code": "CENCORED",
+      "name": "cencored",
+      "sort_order": 1,
+      "is_active": true,
+      "created_at": "2026-09-27T02:01:05.117Z",
+      "updated_at": "2026-09-27T02:10:33.658Z",
+      "deleted_at": null
+    },
+    {
+      "id": "9be92ffa-b15b-4bc0-9c9f-9b57973526c1",
+      "type_id": "e1bbeb22-33be-44b8-8e40-8c0d0e7a0beb",
+      "code": "UNCENCORED",
+      "name": "uncencored",
+      "sort_order": 2,
+      "is_active": true,
+      "created_at": "2026-09-27T02:09:25.215Z",
+      "updated_at": "2026-09-27T02:10:36.129Z",
+      "deleted_at": null
+    },
+    {
+      "id": "62fca2b5-c924-493f-b699-2b363d4fd5a8",
+      "type_id": "86f2ea87-0698-4393-803b-8c1fb8dbd858",
+      "code": "ID",
+      "name": "indonesia",
+      "sort_order": 4,
+      "is_active": true,
+      "created_at": "2026-09-27T02:01:37.511Z",
+      "updated_at": "2026-09-27T02:10:47.823Z",
+      "deleted_at": null
+    },
+    {
+      "id": "1fd23ad0-afe4-4f67-85d8-9a9e57b0899d",
+      "type_id": "3c06c4c1-b811-4f93-a1e5-0fca0c43f61e",
+      "code": "ONGOING",
+      "name": "ongoing",
+      "sort_order": 3,
+      "is_active": true,
+      "created_at": "2026-09-27T02:00:07.268Z",
+      "updated_at": "2026-09-27T02:10:54.363Z",
+      "deleted_at": null
+    },
+    {
+      "id": "0144931f-b5c7-4409-b0ce-109f1e48629e",
+      "type_id": "5947e191-66a3-4306-a15b-6c3056c8a4b3",
+      "code": "MANGA",
+      "name": "manga",
+      "sort_order": 2,
+      "is_active": true,
+      "created_at": "2026-09-27T02:02:11.632Z",
+      "updated_at": "2026-09-27T02:48:51.844Z",
+      "deleted_at": null
+    },
+    {
+      "id": "7abcf33c-30cf-4aa5-9098-b7bff0db52e5",
+      "type_id": "5947e191-66a3-4306-a15b-6c3056c8a4b3",
+      "code": "MANHWA",
+      "name": "manhwa",
+      "sort_order": 3,
+      "is_active": true,
+      "created_at": "2026-09-27T02:02:17.690Z",
+      "updated_at": "2026-09-27T02:49:03.668Z",
+      "deleted_at": null
+    }
+  ]
+}
