@@ -34,6 +34,7 @@ import { PublishComicUploadDto } from './dto/publish-comic.dto';
 import { PublishComicResponseDto } from './dto/publish-comic-response.dto';
 import { ComicMetadataResponseDto } from './dto/comic-metadata.dto';
 import { ComicChaptersResponseDto } from './dto/comic-chapters.dto';
+import { ReorderChaptersDto } from './dto/reorder-chapters.dto';
 
 @ApiTags('Comics')
 @Controller('comics')
@@ -170,6 +171,16 @@ export class ComicsController {
     @Body() body: PublishComicUploadDto,
   ): Promise<PublishComicResponseDto> {
     return this.comicsService.publishComic(files, body);
+  }
+
+  // API Update ordering chapter
+  @Put(':comicId/chapters/reorder')
+  @ApiOperation({ summary: 'Reorder chapters for a comic' })
+  async reorderChapters(
+    @Param('comicId', new ParseUUIDPipe()) comicId: string,
+    @Body() dto: ReorderChaptersDto,
+  ) {
+    return this.comicsService.reorderChapters(comicId, dto);
   }
 
   // API to get chapter details by comic ID and chapter ID

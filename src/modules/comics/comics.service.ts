@@ -33,6 +33,7 @@ import {
 import { NormalizedPage } from '@/types/comics';
 import { ComicMetadataResponseDto } from './dto/comic-metadata.dto';
 import { ComicChaptersResponseDto } from './dto/comic-chapters.dto';
+import { ReorderChaptersDto } from './dto/reorder-chapters.dto';
 
 @Injectable()
 export class ComicsService {
@@ -1262,7 +1263,50 @@ export class ComicsService {
     return result?.[0]?.data ?? null;
   }
 
+  async reorderChapters(comicId: string, dto: ReorderChaptersDto) {
+    const baseTime = Date.now();
+
+    await this.prisma.$transaction(async (tx) => {
+      for (let i = 0; i < dto.chapter_ids.length; i++) {
+        const id = dto.chapter_ids[i];
+        const newNumber = String(i + 1).padStart(3, '0');
+        await tx.chapters.update({
+          where: { id },
+          data: {
+            chapter_number: `TEMP_${newNumber}`,
+            created_at: new Date(baseTime + i * 1000),
+          },
+        });
+      }
+
+      for (let i = 0; i < dto.chapter_ids.length; i++) {
+        const id = dto.chapter_ids[i];
+        const newNumber = String(i + 1).padStart(3, '0');
+        await tx.chapters.update({
+          where: { id },
+          data: {
+            chapter_number: newNumber,
+          },
+        });
+      }
+    });
+
+    return { success: true };
+  }
+
   async getChaptersByComic(comicId: string): Promise<ComicChaptersResponseDto> {
+    const commonLangs = await this.prisma.common_code_details.findMany({
+      where: { type: { code: 'LANGUAGE' } },
+    });
+    const langMap = new Map(
+      commonLangs.map((c) => [c.code.toLowerCase(), c.name]),
+    );
+
+    const commonCensors = await this.prisma.common_code_details.findMany({
+      where: { type: { code: 'CENSORSHIP' } },
+    });
+    const censorMap = new Map(commonCensors.map((c) => [c.id, c.name]));
+
     const chapters = await this.prisma.chapters.findMany({
       where: {
         comic_id: comicId,
@@ -1305,11 +1349,12 @@ export class ComicsService {
           : ch.created_at.toISOString(),
         language: {
           code: ch.languages.code,
-          name: ch.languages.name,
+          name:
+            langMap.get(ch.languages.code.toLowerCase()) || ch.languages.name,
         },
         censorship: {
           id: ch.censorships.id,
-          name: ch.censorships.name,
+          name: censorMap.get(ch.censorships.id) || ch.censorships.name,
         },
         pages: ch.pages.map((p) => ({
           id: p.id,
