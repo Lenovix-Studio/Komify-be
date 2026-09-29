@@ -215,6 +215,9 @@ export class ChaptersService {
         'chapters',
         chapter.chapter_number,
       );
+      try {
+        await fs.mkdir(chapterDir, { recursive: true });
+      } catch (err) {}
 
       // =========================
       // VALIDATE PAGE NUMBER
@@ -293,218 +296,223 @@ export class ChaptersService {
         }
       }
 
-      return await this.prisma.$transaction(async (tx) => {
-        // =========================
-        // UPDATE CHAPTER
-        // =========================
-        await tx.chapters.update({
-          where: {
-            id: chapterId,
-          },
-          data: {
-            title: document.title || null,
-            censorship_id: document.censorship_id,
-            language_code: document.language_code,
-          },
-        });
-
-        // =========================
-        // DELETE PAGES
-        // =========================
-        if (
-          Array.isArray(document.deleted_pages) &&
-          document.deleted_pages.length > 0
-        ) {
-          const pagesToDelete = await tx.pages.findMany({
+      return await this.prisma.$transaction(
+        async (tx) => {
+          // =========================
+          // UPDATE CHAPTER
+          // =========================
+          await tx.chapters.update({
             where: {
-              id: {
-                in: document.deleted_pages,
-              },
+              id: chapterId,
+            },
+            data: {
+              title: document.title || null,
+              censorship_id: document.censorship_id,
+              language_code: document.language_code,
             },
           });
-          for (const page of pagesToDelete) {
+
+          // =========================
+          // DELETE PAGES
+          // =========================
+          if (
+            Array.isArray(document.deleted_pages) &&
+            document.deleted_pages.length > 0
+          ) {
+            const pagesToDelete = await tx.pages.findMany({
+              where: {
+                id: {
+                  in: document.deleted_pages,
+                },
+              },
+            });
+            for (const page of pagesToDelete) {
+              try {
+                const relativePath = page.filepath.replace(STATIC_PREFIX, '');
+                const fullPath = path.join(STATIC_DIR, relativePath);
+                await fs.access(fullPath);
+                await fs.unlink(fullPath);
+              } catch (error) {}
+            }
+            await tx.pages.deleteMany({
+              where: {
+                id: {
+                  in: document.deleted_pages,
+                },
+              },
+            });
+          }
+
+          const existingPages = document.pages.filter(
+            (x) => x.id && (x.action === 'keep' || x.action === 'replace'),
+          );
+          for (const page of existingPages) {
+            await tx.pages.update({
+              where: {
+                id: page.id,
+              },
+              data: {
+                page_number: page.page_number + 10000,
+              },
+            });
+          }
+
+          // =========================
+          // KEEP PAGES
+          // =========================
+          const keepPages = document.pages.filter((x) => x.action === 'keep');
+          for (const page of keepPages) {
+            await tx.pages.update({
+              where: {
+                id: page.id,
+              },
+              data: {
+                page_number: page.page_number,
+              },
+            });
+          }
+
+          // ================================================================
+          // UPDATED: REPLACE PAGES (CONVERT TO WEBP)
+          // ================================================================
+          const replacePages = document.pages.filter(
+            (x) => x.action === 'replace',
+          );
+
+          for (const page of replacePages) {
+            const existingPage = await tx.pages.findUnique({
+              where: {
+                id: page.id,
+              },
+            });
+            if (!existingPage) {
+              throw new BadRequestException(`page not found: ${page.id}`);
+            }
+
+            const uploadedFile = files.find(
+              (f) => f.fieldname === `files_${page.temp_id}`,
+            );
+            if (!uploadedFile) {
+              throw new BadRequestException(
+                `replacement file missing for temp_id ${page.temp_id}`,
+              );
+            }
+
             try {
-              const relativePath = page.filepath.replace(STATIC_PREFIX, '');
+              const relativePath = existingPage.filepath.replace(
+                STATIC_PREFIX,
+                '',
+              );
               const fullPath = path.join(STATIC_DIR, relativePath);
               await fs.access(fullPath);
               await fs.unlink(fullPath);
             } catch (error) {}
-          }
-          await tx.pages.deleteMany({
-            where: {
-              id: {
-                in: document.deleted_pages,
+
+            const filename = `page${page.page_number}.webp`;
+            const savePath = path.join(chapterDir, filename);
+            const isGif =
+              uploadedFile.mimetype === 'image/gif' ||
+              uploadedFile.originalname?.toLowerCase().endsWith('.gif');
+            let webpInfo: sharp.OutputInfo;
+            try {
+              webpInfo = await sharp
+                .default(uploadedFile.buffer, isGif ? { animated: true } : {})
+                .webp({ quality: 80 })
+                .toFile(savePath);
+            } catch (err) {
+              throw new BadRequestException(
+                `Gagal mengonversi file pengganti halaman ${page.page_number} ke WebP`,
+              );
+            }
+
+            await tx.pages.update({
+              where: {
+                id: page.id,
               },
-            },
-          });
-        }
-
-        const existingPages = document.pages.filter(
-          (x) => x.id && (x.action === 'keep' || x.action === 'replace'),
-        );
-        for (const page of existingPages) {
-          await tx.pages.update({
-            where: {
-              id: page.id,
-            },
-            data: {
-              page_number: page.page_number + 10000,
-            },
-          });
-        }
-
-        // =========================
-        // KEEP PAGES
-        // =========================
-        const keepPages = document.pages.filter((x) => x.action === 'keep');
-        for (const page of keepPages) {
-          await tx.pages.update({
-            where: {
-              id: page.id,
-            },
-            data: {
-              page_number: page.page_number,
-            },
-          });
-        }
-
-        // ================================================================
-        // UPDATED: REPLACE PAGES (CONVERT TO WEBP)
-        // ================================================================
-        const replacePages = document.pages.filter(
-          (x) => x.action === 'replace',
-        );
-
-        for (const page of replacePages) {
-          const existingPage = await tx.pages.findUnique({
-            where: {
-              id: page.id,
-            },
-          });
-          if (!existingPage) {
-            throw new BadRequestException(`page not found: ${page.id}`);
+              data: {
+                page_number: page.page_number,
+                filename,
+                filepath:
+                  `${STATIC_PREFIX}/${comicLegacyId}` +
+                  `/chapters/${chapter.chapter_number}/${filename}`,
+                filesize: BigInt(webpInfo.size),
+              },
+            });
           }
 
-          const uploadedFile = files.find(
-            (f) => f.fieldname === `files_${page.temp_id}`,
+          // ================================================================
+          // UPDATED: CREATE NEW PAGES (CONVERT TO WEBP)
+          // ================================================================
+          const createPages = document.pages.filter(
+            (x) => x.action === 'create',
           );
-          if (!uploadedFile) {
-            throw new BadRequestException(
-              `replacement file missing for temp_id ${page.temp_id}`,
+          for (const page of createPages) {
+            const uploadedFile = files.find(
+              (f) => f.fieldname === `files_${page.temp_id}`,
             );
+
+            if (!uploadedFile) {
+              throw new BadRequestException(
+                `file missing for temp_id ${page.temp_id}`,
+              );
+            }
+
+            const filename = `page${page.page_number}.webp`;
+            const savePath = path.join(chapterDir, filename);
+            const isGif =
+              uploadedFile.mimetype === 'image/gif' ||
+              uploadedFile.originalname?.toLowerCase().endsWith('.gif');
+            let webpInfo: sharp.OutputInfo;
+            try {
+              webpInfo = await sharp
+                .default(uploadedFile.buffer, isGif ? { animated: true } : {})
+                .webp({ quality: 80 })
+                .toFile(savePath);
+            } catch (err) {
+              throw new BadRequestException(
+                `Gagal mengonversi halaman baru ${page.page_number} ke WebP`,
+              );
+            }
+
+            await tx.pages.create({
+              data: {
+                chapter_id: chapterId,
+                page_number: page.page_number,
+                filename,
+                filepath:
+                  `${STATIC_PREFIX}/${comicLegacyId}` +
+                  `/chapters/${chapter.chapter_number}/${filename}`,
+                filesize: BigInt(webpInfo.size),
+              },
+            });
           }
 
-          try {
-            const relativePath = existingPage.filepath.replace(
-              STATIC_PREFIX,
-              '',
-            );
-            const fullPath = path.join(STATIC_DIR, relativePath);
-            await fs.access(fullPath);
-            await fs.unlink(fullPath);
-          } catch (error) {}
-
-          const filename = `page${page.page_number}.webp`;
-          const savePath = path.join(chapterDir, filename);
-          const isGif =
-            uploadedFile.mimetype === 'image/gif' ||
-            uploadedFile.originalname?.toLowerCase().endsWith('.gif');
-          let webpInfo: sharp.OutputInfo;
-          try {
-            webpInfo = await sharp
-              .default(uploadedFile.buffer, isGif ? { animated: true } : {})
-              .webp({ quality: 80 })
-              .toFile(savePath);
-          } catch (err) {
-            throw new BadRequestException(
-              `Gagal mengonversi file pengganti halaman ${page.page_number} ke WebP`,
-            );
-          }
-
-          await tx.pages.update({
+          // =========================
+          // RECALCULATE TOTAL PAGES
+          // =========================
+          const totalPages = await tx.pages.count({
             where: {
-              id: page.id,
-            },
-            data: {
-              page_number: page.page_number,
-              filename,
-              filepath:
-                `${STATIC_PREFIX}/${comicLegacyId}` +
-                `/chapters/${chapter.chapter_number}/${filename}`,
-              filesize: BigInt(webpInfo.size),
-            },
-          });
-        }
-
-        // ================================================================
-        // UPDATED: CREATE NEW PAGES (CONVERT TO WEBP)
-        // ================================================================
-        const createPages = document.pages.filter((x) => x.action === 'create');
-        for (const page of createPages) {
-          const uploadedFile = files.find(
-            (f) => f.fieldname === `files_${page.temp_id}`,
-          );
-
-          if (!uploadedFile) {
-            throw new BadRequestException(
-              `file missing for temp_id ${page.temp_id}`,
-            );
-          }
-
-          const filename = `page${page.page_number}.webp`;
-          const savePath = path.join(chapterDir, filename);
-          const isGif =
-            uploadedFile.mimetype === 'image/gif' ||
-            uploadedFile.originalname?.toLowerCase().endsWith('.gif');
-          let webpInfo: sharp.OutputInfo;
-          try {
-            webpInfo = await sharp
-              .default(uploadedFile.buffer, isGif ? { animated: true } : {})
-              .webp({ quality: 80 })
-              .toFile(savePath);
-          } catch (err) {
-            throw new BadRequestException(
-              `Gagal mengonversi halaman baru ${page.page_number} ke WebP`,
-            );
-          }
-
-          await tx.pages.create({
-            data: {
               chapter_id: chapterId,
-              page_number: page.page_number,
-              filename,
-              filepath:
-                `${STATIC_PREFIX}/${comicLegacyId}` +
-                `/chapters/${chapter.chapter_number}/${filename}`,
-              filesize: BigInt(webpInfo.size),
             },
           });
-        }
 
-        // =========================
-        // RECALCULATE TOTAL PAGES
-        // =========================
-        const totalPages = await tx.pages.count({
-          where: {
+          await tx.chapters.update({
+            where: {
+              id: chapterId,
+            },
+            data: {
+              total_pages: totalPages,
+            },
+          });
+
+          return {
+            success: true,
             chapter_id: chapterId,
-          },
-        });
-
-        await tx.chapters.update({
-          where: {
-            id: chapterId,
-          },
-          data: {
             total_pages: totalPages,
-          },
-        });
-
-        return {
-          success: true,
-          chapter_id: chapterId,
-          total_pages: totalPages,
-        };
-      });
+          };
+        },
+        { maxWait: 10000, timeout: 120000 },
+      );
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
