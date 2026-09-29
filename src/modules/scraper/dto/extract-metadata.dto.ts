@@ -1,7 +1,11 @@
-import { IsNotEmpty, IsUrl } from 'class-validator';
+import { IsNotEmpty, IsUrl, IsOptional, IsString } from 'class-validator';
 
 export class ExtractMetadataDto {
   @IsNotEmpty()
   @IsUrl()
   url!: string;
+
+  @IsOptional()
+  @IsString()
+  scraperCode?: string;
 }

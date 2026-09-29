@@ -8,7 +8,10 @@ export class ScraperController {
 
   @Post('metadata')
   async extractMetadata(@Body() dto: ExtractMetadataDto) {
-    const data = await this.scraperService.extractMetadata(dto.url);
+    const data = await this.scraperService.extractMetadata(
+      dto.url,
+      dto.scraperCode,
+    );
     return {
       success: true,
       data,
