@@ -1036,7 +1036,7 @@ export class ComicsService {
         .catch(() => {});
 
       throw new InternalServerErrorException(
-        'Gagal menulis file chapter ke disk',
+        `Gagal menulis file chapter ke disk: ${(fsErr as any).message || fsErr}`,
       );
     }
   }

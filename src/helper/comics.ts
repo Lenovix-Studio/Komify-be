@@ -73,7 +73,11 @@ export async function writeChapterPagesToDisk(
     chapterNumber,
   );
 
-  await fs.mkdir(chapterDir, { recursive: true });
+  try {
+    await fs.mkdir(chapterDir, { recursive: true });
+  } catch (err: any) {
+    if (err.code !== 'EEXIST') throw err;
+  }
 
   for (const page of pages) {
     await saveChapterPage(

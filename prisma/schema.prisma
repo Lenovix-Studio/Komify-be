@@ -320,7 +320,6 @@ model import_logs {
   @@index([status], map: "idx_import_logs_status")
 }
 
-
 model common_code_types {
   id          String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   code        String                @unique @db.VarChar(50)
@@ -346,4 +345,14 @@ model common_code_details {
 
   @@unique([type_id, code], map: "uq_common_code_details_type_code")
   @@index([type_id], map: "idx_common_code_details_type_id")
+}
+
+model system_logs {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  level       String   @db.VarChar(20)
+  source      String   @db.VarChar(50)
+  message     String
+  stack_trace String?
+  context     Json?
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
 }
