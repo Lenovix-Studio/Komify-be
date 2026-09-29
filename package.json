@@ -21,7 +21,10 @@
     "prisma:dev:studio": "dotenv -e .env.dev -- bunx prisma studio",
     "prisma:prod:gen": "dotenv -e .env -- bunx prisma generate",
     "prisma:prod:push": "dotenv -e .env -- bunx prisma db push && dotenv -e .env -- bunx prisma db seed",
-    "prisma:prod:studio": "dotenv -e .env -- bunx prisma studio"
+    "prisma:prod:studio": "dotenv -e .env -- bunx prisma studio",
+    "seed:dump": "dotenv -e .env.dev -- bun run scripts/export-common-code.ts",
+    "seed:dev:run": "dotenv -e .env.dev -- bun run prisma/seeds/run-seed.ts",
+    "seed:prod:run": "dotenv -e .env -- bun run prisma/seeds/run-seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
