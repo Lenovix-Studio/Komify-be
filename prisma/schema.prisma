@@ -253,13 +253,15 @@ model chapters {
 }
 
 model pages {
-  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  chapter_id  String   @db.Uuid
-  page_number Int
-  filename    String
-  filepath    String
-  width       Int?
-  height      Int?
+  id                  String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  chapter_id          String   @db.Uuid
+  page_number         Int
+  filename            String
+  filepath            String
+  translated_filepath String?
+  is_translated       Boolean  @default(false)
+  width               Int?
+  height              Int?
   filesize    BigInt?
   checksum    String?  @db.VarChar(255)
   created_at  DateTime @default(now()) @db.Timestamptz(6)

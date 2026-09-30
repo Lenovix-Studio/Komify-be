@@ -3,6 +3,7 @@ import {
   Controller,
   Param,
   Put,
+  Post,
   Get,
   Delete,
   UploadedFiles,
@@ -44,5 +45,11 @@ export class ChaptersController {
     body: any,
   ) {
     return this.chaptersService.editChapter(chapterId, files, body);
+  }
+
+  // TRANSLATE CHAPTER
+  @Post(':chapterId/translate')
+  async translateChapter(@Param('chapterId') chapterId: string) {
+    return this.chaptersService.translateChapter(chapterId);
   }
 }

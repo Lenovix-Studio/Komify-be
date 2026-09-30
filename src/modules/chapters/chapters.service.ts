@@ -148,6 +148,8 @@ export class ChaptersService {
         id: page.id,
         filename: page.filename,
         filepath: page.filepath,
+        translated_filepath: page.translated_filepath,
+        is_translated: page.is_translated,
         page_number: page.page_number,
         width: page.width,
         height: page.height,
@@ -521,5 +523,108 @@ export class ChaptersService {
         error || 'Gagal memperbarui chapter',
       );
     }
+  }
+
+  async translateChapter(chapterId: string) {
+    const chapter = await this.prisma.chapters.findUnique({
+      where: { id: chapterId },
+      include: { pages: { orderBy: { page_number: 'asc' } } },
+    });
+    if (!chapter) throw new NotFoundException('Chapter not found');
+
+    this.processTranslation(chapter).catch((err) => {
+      console.error('Translation process failed for chapter', chapterId, err);
+    });
+
+    return {
+      message: 'Translation queued successfully',
+      chapterId: chapterId,
+      pagesCount: chapter.pages.length,
+    };
+  }
+
+  private async processTranslation(chapter: any) {
+    console.log(
+      `Started background translation for chapter ${chapter.chapter_number}`,
+    );
+    const TRANSLATOR_API = 'http://localhost:5003/translate/with-form/image';
+
+    for (const page of chapter.pages) {
+      try {
+        console.log(`Translating page ${page.page_number}...`);
+        const STATIC_DIR = this.configService.get('STATIC_DIR') || '';
+        const STATIC_PREFIX = this.configService.get('STATIC_PREFIX') || '';
+
+        let relativePath = page.filepath;
+        if (STATIC_PREFIX && relativePath.startsWith(STATIC_PREFIX)) {
+          relativePath = relativePath.slice(STATIC_PREFIX.length);
+        }
+
+        if (relativePath.startsWith('/')) {
+          relativePath = relativePath.slice(1);
+        }
+
+        const imagePath = path.resolve(process.cwd(), STATIC_DIR, relativePath);
+        const imageBuffer = await fs.readFile(imagePath);
+
+        const formData = new FormData();
+        const blob = new Blob([imageBuffer], { type: 'image/png' });
+        formData.append('image', blob, page.filename);
+
+        formData.append(
+          'config',
+          JSON.stringify({ translator: { target_lang: 'ENG' } }),
+        );
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 600000);
+
+        const response = await fetch(TRANSLATOR_API, {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal as any,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          console.error(
+            `Failed to translate page ${page.page_number}, status: ${response.status}`,
+          );
+          continue;
+        }
+
+        const translatedBuffer = await response.arrayBuffer();
+
+        const ext = path.extname(page.filename);
+        const translatedFilename = page.filename.replace(
+          ext,
+          `_translated${ext}`,
+        );
+        const chapterDir = path.dirname(imagePath);
+        const translatedPath = path.join(chapterDir, translatedFilename);
+
+        await fs.writeFile(translatedPath, Buffer.from(translatedBuffer));
+
+        const translatedDbPath = page.filepath.replace(
+          page.filename,
+          translatedFilename,
+        );
+
+        await this.prisma.pages.update({
+          where: { id: page.id },
+          data: {
+            translated_filepath: translatedDbPath,
+            is_translated: true,
+          },
+        });
+
+        console.log(`Success translating page ${page.page_number}`);
+      } catch (error) {
+        console.error(`Error translating page ${page.page_number}:`, error);
+      }
+    }
+
+    console.log(`Finished translation for chapter ${chapter.chapter_number}`);
   }
 }
