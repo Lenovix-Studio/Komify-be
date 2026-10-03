@@ -1,11 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
+import {
+  IsString,
+  IsOptional,
+  IsObject,
+} from 'class-validator';
 
 export class CreateLogDto {
+  @IsString()
   level!: string;
+
+  @IsString()
   source!: string;
+
+  @IsString()
   message!: string;
+
+  @IsOptional()
+  @IsString()
   stack_trace?: string;
+
+  @IsOptional()
+  @IsObject()
   context?: any;
 }
 

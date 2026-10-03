@@ -12,14 +12,25 @@ export class ScraperService {
         body: JSON.stringify({ url, scraper_code: scraperCode }),
       });
 
-      const data = await response.json();
+      const text = await response.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new BadRequestException(
+          `Scraper returned non-JSON response (HTTP ${response.status}): ${text.slice(0, 200)}`,
+        );
+      }
+
       if (response.ok && data.success) {
         return data.data;
       }
+
       throw new BadRequestException(
-        data.detail || 'Failed to extract data from scraper service',
+        data.detail || data.message || 'Failed to extract data from scraper service',
       );
     } catch (error: any) {
+      if (error instanceof BadRequestException) throw error;
       console.error('Scraper service error:', error.message);
       throw new BadRequestException(
         error.message || 'Scraper service unavailable',
