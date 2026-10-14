@@ -45,7 +45,7 @@ export class SystemController {
     return this.systemService.getCategories();
   }
 
-  // API to get status
+  // API to get statuses
   @Get('statuses')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -64,6 +64,26 @@ export class SystemController {
   })
   async getStatuses(): Promise<StatusResponseDto[]> {
     return this.systemService.getStatuses();
+  }
+
+  // API to get dashboard statistics
+  @Get('dashboard-stats')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mendapatkan statistik dashboard (total komik dan per status)',
+    description:
+      'Mengambil total komik dan breakdown komik berdasarkan status.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Statistik dashboard berhasil diambil',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'Terjadi kesalahan pada server saat mengambil data',
+  })
+  async getDashboardStats() {
+    return this.systemService.getDashboardStats();
   }
 
   // API to get censorships

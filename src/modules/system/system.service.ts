@@ -59,6 +59,40 @@ export class SystemService {
     }
   }
 
+  async getDashboardStats() {
+    try {
+      const totalComics = await this.prisma.comics.count({
+        where: { deleted_at: null },
+      });
+
+      const statuses = await this.prisma.statuses.findMany();
+      const statusStats = await Promise.all(
+        statuses.map(async (status) => {
+          const count = await this.prisma.comics.count({
+            where: {
+              status_id: status.id,
+              deleted_at: null,
+            },
+          });
+          return {
+            name: status.name,
+            count,
+          };
+        }),
+      );
+
+      return {
+        totalComics,
+        statuses: statusStats,
+      };
+    } catch (error) {
+      this.logger.error('Failed to retrieve dashboard stats', error);
+      throw new InternalServerErrorException(
+        'Gagal mengambil statistik dashboard',
+      );
+    }
+  }
+
   async getCensorships(): Promise<CensorshipResponseDto[]> {
     try {
       return await this.prisma.censorships.findMany({
