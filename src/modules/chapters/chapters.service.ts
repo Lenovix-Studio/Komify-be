@@ -289,7 +289,7 @@ export class ChaptersService {
         if (ccLanguage) {
           language = await this.prisma.languages.create({
             data: {
-              code: document.language_code.toLowerCase(),
+              code: document.language_code.toLowerCase().slice(0, 5),
               name: ccLanguage.name,
             },
           });
