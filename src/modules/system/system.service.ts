@@ -81,9 +81,65 @@ export class SystemService {
         }),
       );
 
+      const comicsWithRatings = await this.prisma.comics.findMany({
+        where: {
+          deleted_at: null,
+          rating_count: { gt: 0 },
+        },
+        select: {
+          rating_score: true,
+          rating_count: true,
+        },
+      });
+
+      const ratedComicsCount = comicsWithRatings.length;
+      const totalVotes = comicsWithRatings.reduce(
+        (acc, c) => acc + (c.rating_count || 0),
+        0,
+      );
+
+      const averageScore =
+        ratedComicsCount > 0
+          ? Number(
+              (
+                comicsWithRatings.reduce(
+                  (acc, c) => acc + (c.rating_score || 0),
+                  0,
+                ) / ratedComicsCount
+              ).toFixed(1),
+            )
+          : 0;
+
+      const starCounts: Record<number, number> = {
+        5: 0,
+        4: 0,
+        3: 0,
+        2: 0,
+        1: 0,
+      };
+
+      for (const c of comicsWithRatings) {
+        const rounded = Math.min(
+          5,
+          Math.max(1, Math.round(c.rating_score || 1)),
+        );
+        starCounts[rounded] = (starCounts[rounded] || 0) + 1;
+      }
+
+      const ratingBreakdown = [5, 4, 3, 2, 1].map((stars) => ({
+        stars,
+        count: starCounts[stars] || 0,
+      }));
+
       return {
         totalComics,
         statuses: statusStats,
+        ratings: {
+          averageScore,
+          totalVotes,
+          ratedComicsCount,
+          breakdown: ratingBreakdown,
+        },
       };
     } catch (error) {
       this.logger.error('Failed to retrieve dashboard stats', error);
