@@ -457,10 +457,12 @@ export class ComicsService {
       };
     }
 
-    let orderBy: Prisma.comicsOrderByWithRelationInput;
+    let orderBy:
+      | Prisma.comicsOrderByWithRelationInput
+      | Prisma.comicsOrderByWithRelationInput[];
     switch (query.sort) {
       case ComicSortBy.NEWEST:
-        orderBy = { created_at: 'desc' };
+        orderBy = [{ published_at: 'desc' }, { created_at: 'desc' }];
         break;
       case ComicSortBy.POPULAR:
         orderBy = { view_count: 'desc' };
@@ -470,7 +472,11 @@ export class ComicsService {
         break;
       case ComicSortBy.LATEST:
       default:
-        orderBy = { legacy_id: 'desc' };
+        orderBy = [
+          { updated_at: 'desc' },
+          { published_at: 'desc' },
+          { created_at: 'desc' },
+        ];
         break;
     }
 
@@ -998,7 +1004,10 @@ export class ComicsService {
 
         await tx.comics.update({
           where: { id: comicId },
-          data: { total_chapters: totalChapters },
+          data: {
+            total_chapters: totalChapters,
+            updated_at: new Date(),
+          },
         });
       });
     } catch (dbErr) {

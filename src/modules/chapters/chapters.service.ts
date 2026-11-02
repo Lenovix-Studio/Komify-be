@@ -507,6 +507,15 @@ export class ChaptersService {
             },
           });
 
+          await tx.comics.update({
+            where: {
+              id: chapter.comic_id,
+            },
+            data: {
+              updated_at: new Date(),
+            },
+          });
+
           return {
             success: true,
             chapter_id: chapterId,
