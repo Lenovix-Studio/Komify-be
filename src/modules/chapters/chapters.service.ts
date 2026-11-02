@@ -303,15 +303,21 @@ export class ChaptersService {
           // =========================
           // UPDATE CHAPTER
           // =========================
+          const updateChapterData: any = {
+            title: document.title || null,
+            censorship_id: document.censorship_id,
+            language_code: document.language_code,
+          };
+
+          if (document.chapter_number) {
+            updateChapterData.chapter_number = String(document.chapter_number);
+          }
+
           await tx.chapters.update({
             where: {
               id: chapterId,
             },
-            data: {
-              title: document.title || null,
-              censorship_id: document.censorship_id,
-              language_code: document.language_code,
-            },
+            data: updateChapterData,
           });
 
           // =========================
