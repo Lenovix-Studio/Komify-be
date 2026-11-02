@@ -319,13 +319,15 @@ export class ComicsService {
     try {
       const result = await this.prisma.$queryRaw<RandomComicResponseDto[]>`
       SELECT 
-        id, 
-        title, 
-        seo_slug, 
-        cover_path, 
-        total_chapters
-      FROM public.comics
-      WHERE deleted_at IS NULL
+        c.id, 
+        c.title, 
+        c.seo_slug, 
+        c.cover_path, 
+        c.total_chapters
+      FROM public.comics c
+      JOIN public.statuses s ON s.id = c.status_id
+      WHERE c.deleted_at IS NULL
+        AND LOWER(s.name) NOT IN ('not complete', 'not completed')
       ORDER BY RANDOM()
       LIMIT 1;
     `;
