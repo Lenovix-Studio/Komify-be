@@ -131,9 +131,30 @@ export class SystemService {
         count: starCounts[stars] || 0,
       }));
 
+      const languages = await this.prisma.languages.findMany();
+      const languageStats = await Promise.all(
+        languages.map(async (lang) => {
+          const count = await this.prisma.chapters.count({
+            where: {
+              language_code: lang.code,
+              deleted_at: null,
+              comics: {
+                deleted_at: null,
+              },
+            },
+          });
+          return {
+            code: lang.code,
+            name: lang.name,
+            count,
+          };
+        }),
+      );
+
       return {
         totalComics,
         statuses: statusStats,
+        languages: languageStats.filter((l) => l.count > 0),
         ratings: {
           averageScore,
           totalVotes,
