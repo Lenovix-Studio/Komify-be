@@ -216,7 +216,7 @@ model comics {
   categories        categories         @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comics_category")
   import_logs       import_logs?       @relation(fields: [import_log_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comics_import_log")
   statuses          statuses           @relation(fields: [status_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comics_status")
-  read_histories    read_histories[]
+  read_histories    read_histories?
   search_indexes    search_indexes?
 
   @@index([category_id], map: "idx_comics_category_id")
@@ -262,11 +262,11 @@ model pages {
   is_translated       Boolean  @default(false)
   width               Int?
   height              Int?
-  filesize    BigInt?
-  checksum    String?  @db.VarChar(255)
-  created_at  DateTime @default(now()) @db.Timestamptz(6)
-  updated_at  DateTime @default(now()) @db.Timestamptz(6)
-  chapters    chapters @relation(fields: [chapter_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pages_chapter")
+  filesize            BigInt?
+  checksum            String?  @db.VarChar(255)
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime @default(now()) @db.Timestamptz(6)
+  chapters            chapters @relation(fields: [chapter_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pages_chapter")
 
   @@unique([chapter_id, page_number], map: "uq_pages_unique")
   @@index([chapter_id], map: "idx_pages_chapter_id")
@@ -281,8 +281,7 @@ model bookmarks {
 
 model read_histories {
   id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  user_id    String   @db.Uuid
-  comic_id   String   @db.Uuid
+  comic_id   String   @unique(map: "uq_read_histories_comic") @db.Uuid
   chapter_id String   @db.Uuid
   last_page  Int      @default(1)
   created_at DateTime @default(now()) @db.Timestamptz(6)
@@ -290,10 +289,8 @@ model read_histories {
   chapters   chapters @relation(fields: [chapter_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_read_histories_chapter")
   comics     comics   @relation(fields: [comic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_read_histories_comic")
 
-  @@unique([user_id, chapter_id], map: "uq_read_histories_user_chapter")
   @@index([chapter_id], map: "idx_read_histories_chapter_id")
   @@index([comic_id], map: "idx_read_histories_comic_id")
-  @@index([user_id], map: "idx_read_histories_user_id")
 }
 
 model search_indexes {

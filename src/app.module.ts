@@ -9,6 +9,7 @@ import { ComicsModule } from './modules/comics/comics.module';
 import { ChaptersModule } from './modules/chapters/chapters.module';
 import { ScraperModule } from './modules/scraper/scraper.module';
 import { BookmarksModule } from './modules/bookmarks/bookmarks.module';
+import { HistoryModule } from './modules/history/history.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { BookmarksModule } from './modules/bookmarks/bookmarks.module';
     ChaptersModule,
     ScraperModule,
     BookmarksModule,
+    HistoryModule,
   ],
   controllers: [AppController],
   providers: [AppService],
